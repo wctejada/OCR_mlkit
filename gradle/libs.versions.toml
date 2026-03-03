@@ -10,7 +10,7 @@ navigationFragment = "2.9.7"
 navigationUi = "2.9.7"
 mlkit-text = "16.0.1"
 mlkit-translate = "17.0.3"
-
+camera = "1.5.3"
 
 [libraries]
 junit = { group = "junit", name = "junit", version.ref = "junit" }
@@ -23,6 +23,11 @@ navigation-fragment = { group = "androidx.navigation", name = "navigation-fragme
 navigation-ui = { group = "androidx.navigation", name = "navigation-ui", version.ref = "navigationUi" }
 mlkit-ocr = { group = "com.google.mlkit",name = "text-recognition",version.ref = "mlkit-text" }
 mlkit-translation = { group = "com.google.mlkit",name = "translate", version.ref = "mlkit-translate" }
+camera-core = { group = "androidx.camera", name = "camera-core", version.ref = "camera" }
+camera-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "camera" }
+camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camera" }
+camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camera" }
+
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

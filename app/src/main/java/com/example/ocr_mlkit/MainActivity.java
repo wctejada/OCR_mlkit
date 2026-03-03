@@ -15,6 +15,7 @@ import android.view.View;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.view.PreviewView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
@@ -26,11 +27,18 @@ import com.google.mlkit.vision.text.Text;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
-
+import androidx.camera.core.*;
+import androidx.camera.lifecycle.ProcessCameraProvider;
+import com.google.common.util.concurrent.ListenableFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutionException;
 import java.io.File;
 import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.concurrent.ExecutorService;
+import androidx.camera.core.ImageProxy;
+import android.media.Image;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -39,6 +47,8 @@ public class MainActivity extends AppCompatActivity {
     private Bitmap imagenSeleccionada;
     private TextRecognizer recognizer;
 
+    private ExecutorService cameraExecutor;
+    private PreviewView previewView;
     private static final int REQUEST_IMAGE_CAPTURE = 100;
     private static final int REQUEST_PICK_IMAGE = 101;
     private static final int REQUEST_PERMISSIONS = 102;
@@ -47,33 +57,45 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Inicializar OCR
-        recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
-
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
         setSupportActionBar(binding.toolbar);
+        // Inicializar OCR
+        recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
 
-        // Botón cámara
+// Inicializar Live Preview
+        previewView = binding.contentMain.previewView;
+        cameraExecutor = Executors.newSingleThreadExecutor();
+
+
+        // Botón cámar
         binding.fabCam.setOnClickListener(view -> {
             if (checkAndRequestPermissions()) {
-                abrirCamara();
+                iniciarLivePreview();
             } else {
-                Snackbar.make(binding.getRoot(), "Favor otorgar permisos", Snackbar.LENGTH_LONG).show();
+                Snackbar.make(binding.getRoot(),
+                        "Favor otorgar permisos",
+                        Snackbar.LENGTH_LONG).show();
             }
         });
+
         binding.contentMain.btnEjecutarCamara.setOnClickListener(view -> {
             if (checkAndRequestPermissions()) {
                 abrirCamara();
             } else {
-                Snackbar.make(binding.getRoot(), "Favor otorgar permisos", Snackbar.LENGTH_LONG).show();
+                Snackbar.make(binding.getRoot(),
+                        "Favor otorgar permisos",
+                        Snackbar.LENGTH_LONG).show();
             }
         });
+
         // Botón galería
         binding.contentMain.btnSeleccionarGaleria.setOnClickListener(v -> abrirGaleria());
 
         // Inicializar TextView
-        binding.contentMain.txtResultado.setText("Selecciona una foto de la galería o toma una con la cámara para iniciar.");
+        binding.contentMain.txtResultado.setText(
+                "Selecciona una foto o usa Live Preview con el botón flotante."
+        );
     }
 
     // -----------------------------
@@ -116,7 +138,80 @@ public class MainActivity extends AppCompatActivity {
             Snackbar.make(binding.getRoot(), "No se encontró app para manejo de cámara", Snackbar.LENGTH_LONG).show();
         }
     }
+    private void iniciarLivePreview() {
 
+        binding.contentMain.previewView.setVisibility(View.VISIBLE);
+        binding.contentMain.imgBarcode.setVisibility(View.GONE);
+
+        ListenableFuture<ProcessCameraProvider> cameraProviderFuture =
+                ProcessCameraProvider.getInstance(this);
+
+        cameraProviderFuture.addListener(() -> {
+            try {
+
+                ProcessCameraProvider cameraProvider = cameraProviderFuture.get();
+
+                Preview preview = new Preview.Builder().build();
+                preview.setSurfaceProvider(previewView.getSurfaceProvider());
+
+                ImageAnalysis imageAnalysis =
+                        new ImageAnalysis.Builder()
+                                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                                .build();
+
+                imageAnalysis.setAnalyzer(cameraExecutor, imageProxy -> {
+                    procesarFrame(imageProxy);
+                });
+
+                CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
+
+                cameraProvider.unbindAll();
+                cameraProvider.bindToLifecycle(
+                        this,
+                        cameraSelector,
+                        preview,
+                        imageAnalysis
+                );
+
+            } catch (ExecutionException | InterruptedException e) {
+                e.printStackTrace();
+            }
+
+        }, ContextCompat.getMainExecutor(this));
+    }
+    private void procesarFrame(ImageProxy imageProxy) {
+
+        @androidx.annotation.Nullable
+        android.media.Image mediaImage = imageProxy.getImage();
+
+        if (mediaImage != null) {
+
+            InputImage image = InputImage.fromMediaImage(
+                    mediaImage,
+                    imageProxy.getImageInfo().getRotationDegrees()
+            );
+
+            recognizer.process(image)
+                    .addOnSuccessListener(text -> {
+
+                        String detectedText = text.getText();
+
+                        runOnUiThread(() -> {
+                            if (detectedText.isEmpty()) {
+                                binding.contentMain.txtResultado.setText("Escaneando...");
+                            } else {
+                                binding.contentMain.txtResultado.setText(detectedText);
+                            }
+                        });
+
+                    })
+                    .addOnFailureListener(e -> Log.e("LIVE_OCR", "Error", e))
+                    .addOnCompleteListener(task -> imageProxy.close());
+
+        } else {
+            imageProxy.close();
+        }
+    }
     // -----------------------------
     // RESULTADO DE IMAGEN
     // -----------------------------
@@ -217,9 +312,7 @@ public class MainActivity extends AppCompatActivity {
         return true;
     }
 
-    // -----------------------------
     // CREAR ARCHIVO TEMPORAL DE IMAGEN
-    // -----------------------------
     private File createImageFile() throws IOException {
         String fechaHoy = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
         String nombreArchivo = "JPEG_" + fechaHoy + "_";
@@ -237,7 +330,13 @@ public class MainActivity extends AppCompatActivity {
         getMenuInflater().inflate(R.menu.menu_main, menu);
         return true;
     }
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
 
+        if (recognizer != null) recognizer.close();
+        if (cameraExecutor != null) cameraExecutor.shutdown();
+    }
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
