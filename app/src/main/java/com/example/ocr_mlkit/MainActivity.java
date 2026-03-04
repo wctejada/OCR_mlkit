@@ -27,9 +27,12 @@ import com.google.mlkit.vision.text.Text;
 import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
+
 import androidx.camera.core.*;
 import androidx.camera.lifecycle.ProcessCameraProvider;
+
 import com.google.common.util.concurrent.ListenableFuture;
+
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutionException;
 import java.io.File;
@@ -37,18 +40,27 @@ import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.concurrent.ExecutorService;
+
 import androidx.camera.core.ImageProxy;
+
 import android.media.Image;
 
 public class MainActivity extends AppCompatActivity {
 
     private ActivityMainBinding binding;
+    private PreviewView previewView;
+
+
     private String directorioImagen;
     private Bitmap imagenSeleccionada;
+
+
     private TextRecognizer recognizer;
 
+
     private ExecutorService cameraExecutor;
-    private PreviewView previewView;
+
+
     private static final int REQUEST_IMAGE_CAPTURE = 100;
     private static final int REQUEST_PICK_IMAGE = 101;
     private static final int REQUEST_PERMISSIONS = 102;
@@ -63,12 +75,12 @@ public class MainActivity extends AppCompatActivity {
         // Inicializar OCR
         recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
 
-// Inicializar Live Preview
+        // Inicializar Live Preview
         previewView = binding.contentMain.previewView;
         cameraExecutor = Executors.newSingleThreadExecutor();
 
 
-        // Botón cámar
+        // Botón camara live preview
         binding.fabCam.setOnClickListener(view -> {
             if (checkAndRequestPermissions()) {
                 iniciarLivePreview();
@@ -78,7 +90,7 @@ public class MainActivity extends AppCompatActivity {
                         Snackbar.LENGTH_LONG).show();
             }
         });
-
+        //Tomar foto
         binding.contentMain.btnEjecutarCamara.setOnClickListener(view -> {
             if (checkAndRequestPermissions()) {
                 abrirCamara();
@@ -92,15 +104,15 @@ public class MainActivity extends AppCompatActivity {
         // Botón galería
         binding.contentMain.btnSeleccionarGaleria.setOnClickListener(v -> abrirGaleria());
 
-        // Inicializar TextView
+        // Texto inicial
         binding.contentMain.txtResultado.setText(
                 "Selecciona una foto o usa Live Preview con el botón flotante."
         );
     }
 
-    // -----------------------------
+
     // MÉTODOS DE SELECCIÓN DE IMAGEN
-    // -----------------------------
+
     private void abrirGaleria() {
         if (checkAndRequestPermissions()) {
             Intent galeriaIntent = new Intent(Intent.ACTION_GET_CONTENT);
@@ -124,7 +136,7 @@ public class MainActivity extends AppCompatActivity {
                 archivoImagen = createImageFile();
             } catch (Exception error) {
                 error.printStackTrace();
-                Log.d("IMAGEN_CAMARA","Error al generar archivo de imagen");
+                Log.d("IMAGEN_CAMARA", "Error al generar archivo de imagen");
             }
 
             if (archivoImagen != null) {
@@ -138,6 +150,8 @@ public class MainActivity extends AppCompatActivity {
             Snackbar.make(binding.getRoot(), "No se encontró app para manejo de cámara", Snackbar.LENGTH_LONG).show();
         }
     }
+
+    // LIVE PREVIEW
     private void iniciarLivePreview() {
 
         binding.contentMain.previewView.setVisibility(View.VISIBLE);
@@ -179,6 +193,7 @@ public class MainActivity extends AppCompatActivity {
 
         }, ContextCompat.getMainExecutor(this));
     }
+
     private void procesarFrame(ImageProxy imageProxy) {
 
         @androidx.annotation.Nullable
@@ -212,9 +227,9 @@ public class MainActivity extends AppCompatActivity {
             imageProxy.close();
         }
     }
-    // -----------------------------
+
     // RESULTADO DE IMAGEN
-    // -----------------------------
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -254,9 +269,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // -----------------------------
-    // OCR CON ML KIT
-    // -----------------------------
+
+    // OCR
+
     private void procesarOCR(Bitmap bitmap) {
         if (bitmap == null) {
             binding.contentMain.txtResultado.setText("No hay imagen para OCR");
@@ -270,7 +285,7 @@ public class MainActivity extends AppCompatActivity {
                     .addOnSuccessListener(visionText -> {
                         StringBuilder resultado = new StringBuilder();
 
-                        // Bloques y líneas de texto (para posible traducción posterior)
+
                         for (Text.TextBlock block : visionText.getTextBlocks()) {
                             for (Text.Line line : block.getLines()) {
                                 resultado.append(line.getText()).append("\n");
@@ -295,9 +310,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // -----------------------------
+
     // PERMISOS
-    // -----------------------------
+
     private boolean checkAndRequestPermissions() {
         int cameraPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA);
         if (cameraPermission != PackageManager.PERMISSION_GRANTED) {
@@ -322,14 +337,15 @@ public class MainActivity extends AppCompatActivity {
         return imagen;
     }
 
-    // -----------------------------
+
     // MENÚ
-    // -----------------------------
+
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         getMenuInflater().inflate(R.menu.menu_main, menu);
         return true;
     }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
@@ -337,6 +353,7 @@ public class MainActivity extends AppCompatActivity {
         if (recognizer != null) recognizer.close();
         if (cameraExecutor != null) cameraExecutor.shutdown();
     }
+
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
         int id = item.getItemId();
