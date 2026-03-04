@@ -87,8 +87,8 @@ public class MainActivity extends AppCompatActivity {
         // Traduccion
         TranslatorOptions options =
                 new TranslatorOptions.Builder()
-                        .setSourceLanguage(TranslateLanguage.ENGLISH)
-                        .setTargetLanguage(TranslateLanguage.SPANISH)
+                        .setSourceLanguage(TranslateLanguage.SPANISH)
+                        .setTargetLanguage(TranslateLanguage.ENGLISH)
                         .build();
         translator = Translation.getClient(options);
 
