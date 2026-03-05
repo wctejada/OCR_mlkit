@@ -13,7 +13,7 @@
         android:orientation="horizontal"
         app:layout_constraintGuide_percent="0.58" />
 
-    <!-- Zona de cámara -->
+    <!-- Zona de cámara e imagen -->
     <FrameLayout
         android:id="@+id/cameraFrame"
         android:layout_width="0dp"
@@ -33,40 +33,95 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:scaleType="centerCrop"
-            android:contentDescription="@string/scan_image_description"
+            android:contentDescription="Imagen capturada"
             android:visibility="gone" />
 
-        <TextView
-            android:id="@+id/badgeModo"
+        <!-- Overlay de Escaneo (Encuadre) -->
+        <View
+            android:id="@+id/scannerOverlay"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#80000000" />
+
+        <View
+            android:id="@+id/scannerFrame"
+            android:layout_width="300dp"
+            android:layout_height="200dp"
+            android:layout_gravity="center"
+            android:background="@drawable/scanner_frame_border" />
+
+        <!-- Contenedor para traducciones posicionadas (AR-like) -->
+        <FrameLayout
+            android:id="@+id/overlayContainer"
+            android:layout_width="300dp"
+            android:layout_height="200dp"
+            android:layout_gravity="center"
+            android:visibility="gone" />
+
+        <!-- Botones de control laterales (Badges e idioma) -->
+        <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_gravity="top|end"
             android:layout_margin="12dp"
-            android:background="@drawable/badge_background"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
-            android:paddingTop="4dp"
-            android:paddingBottom="4dp"
-            android:text="● LIVE"
-            android:textColor="#FFFFFF"
-            android:textSize="12sp"
-            android:textStyle="bold" />
+            android:orientation="vertical"
+            android:gravity="end">
 
-        <!-- Botones flotantes -->
+            <TextView
+                android:id="@+id/badgeModo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/badge_background"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp"
+                android:text="● LIVE"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCambiarIdioma"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="EN → ES"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="#80000000"
+                app:strokeColor="#FFFFFF"
+                android:textSize="10sp"
+                app:cornerRadius="4dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnVerOriginal"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Ver Original"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="#80000000"
+                android:textSize="10sp"
+                android:visibility="gone"
+                app:cornerRadius="4dp" />
+        </LinearLayout>
+
+        <!-- Botones inferiores (Cerca de la cámara) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="bottom|center_horizontal"
             android:orientation="horizontal"
-            android:padding="12dp"
+            android:padding="16dp"
             android:gravity="center">
 
-            <!-- Capturar: solo en modo LIVE -->
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/btnCapturar"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="24dp"
+                android:layout_marginEnd="16dp"
                 android:contentDescription="Capturar foto"
                 android:visibility="gone"
                 app:srcCompat="@android:drawable/ic_menu_camera"
@@ -74,12 +129,27 @@
                 app:backgroundTint="#CC1976D2"
                 app:fabSize="normal" />
 
-            <!-- Reanudar: cuando está congelado -->
+            <!-- BOTÓN TRADUCIR MOVIDO AQUÍ -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnTraducir"
+                style="@style/Widget.MaterialComponents.Button"
+                android:layout_width="wrap_content"
+                android:layout_height="56dp"
+                android:layout_marginEnd="16dp"
+                android:text="TRADUCIR"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="#E91E63"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:visibility="gone"
+                app:cornerRadius="28dp"
+                app:icon="@android:drawable/ic_menu_send" />
+
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/btnReanudar"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginEnd="24dp"
+                android:layout_marginEnd="16dp"
                 android:contentDescription="Reanudar live"
                 android:visibility="gone"
                 app:srcCompat="@android:drawable/ic_media_play"
@@ -87,13 +157,6 @@
                 app:backgroundTint="#CC388E3C"
                 app:fabSize="normal" />
 
-            <!--
-                btnGaleria: se muestra SOLO en modo LIVE (controlado desde MainActivity)
-                btnVolverHome: se muestra SOLO en modo GALERIA (controlado desde MainActivity)
-                Ambos se ocultan/muestran según el EXTRA_MODO recibido
-            -->
-
-            <!-- Galería: visible solo en modo LIVE -->
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/btnGaleria"
                 android:layout_width="wrap_content"

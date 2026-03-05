@@ -1,166 +1,139 @@
 package com.example.ocr_mlkit;
 
+import android.graphics.Rect;
+import com.google.mlkit.vision.text.Text;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
-import java.util.regex.Pattern;
 
 public class TextFormatter {
 
     /**
-     * Limpia y formatea el texto crudo del OCR para que sea legible.
-     *
-     * Problemas típicos del OCR que se corrigen:
-     *  - Líneas partidas en medio de una oración
-     *  - Espacios duplicados o irregulares
-     *  - Guiones de corte de palabra al final de línea (ej: "trans-\nlate")
-     *  - Caracteres basura (símbolos raros producto del ruido en la imagen)
-     *  - Líneas muy cortas que son fragmentos sueltos
-     *  - Párrafos separados correctamente
+     * Procesa el objeto Text de ML Kit para capturas estáticas.
      */
-    public static String formatear(String textoRaw) {
+    public static String formatear(Text visionText) {
+        if (visionText == null || visionText.getTextBlocks().isEmpty()) return "";
+        return formatearConFiltro(visionText, null);
+    }
+
+    /**
+     * Formateo para LIVE, filtrando por una zona rectangular si se proporciona.
+     */
+    public static String formatearLive(Text visionText, Rect zonaFiltro) {
+        if (visionText == null || visionText.getTextBlocks().isEmpty()) return "";
+
+        List<Text.Line> lineasFiltradas = obtenerLineasOrdenadas(visionText, zonaFiltro);
+        List<String> textos = new ArrayList<>();
+
+        for (Text.Line line : lineasFiltradas) {
+            String t = line.getText().trim();
+            if (t.length() > 2 && !esBasura(t)) {
+                textos.add(t);
+            }
+        }
+
+        if (textos.isEmpty()) return "";
+        return textos.size() <= 3 ? String.join("\n", textos) : String.join(" ", textos);
+    }
+
+    private static String formatearConFiltro(Text visionText, Rect zonaFiltro) {
+        List<Text.Line> lineas = obtenerLineasOrdenadas(visionText, zonaFiltro);
+        StringBuilder sb = new StringBuilder();
+        int lastY = -1;
+
+        for (Text.Line line : lineas) {
+            int currentY = line.getBoundingBox().top;
+            if (lastY != -1 && Math.abs(currentY - lastY) > 50) {
+                sb.append("\n\n");
+            } else if (lastY != -1) {
+                sb.append(" ");
+            }
+            sb.append(line.getText());
+            lastY = currentY;
+        }
+
+        return limpiarTextoFinal(sb.toString());
+    }
+
+    private static List<Text.Line> obtenerLineasOrdenadas(Text visionText, Rect zonaFiltro) {
+        List<Text.Line> lineas = new ArrayList<>();
+        for (Text.TextBlock block : visionText.getTextBlocks()) {
+            for (Text.Line line : block.getLines()) {
+                if (zonaFiltro == null || Rect.intersects(zonaFiltro, line.getBoundingBox())) {
+                    lineas.add(line);
+                }
+            }
+        }
+
+        Collections.sort(lineas, new Comparator<Text.Line>() {
+            @Override
+            public int compare(Text.Line l1, Text.Line l2) {
+                int y1 = l1.getBoundingBox().top;
+                int y2 = l2.getBoundingBox().top;
+                if (Math.abs(y1 - y2) < 30) {
+                    return Integer.compare(l1.getBoundingBox().left, l2.getBoundingBox().left);
+                }
+                return Integer.compare(y1, y2);
+            }
+        });
+        return lineas;
+    }
+
+    private static String limpiarTextoFinal(String textoRaw) {
         if (textoRaw == null || textoRaw.trim().isEmpty()) return "";
+        String texto = textoRaw.replace("\r\n", "\n").replace("\r", "\n")
+                .replaceAll("-\\n([a-záéíóúüña-z])", "$1")
+                .replaceAll("\\s{2,}", " ");
 
-        // 1. Normalizar saltos de línea
-        String texto = textoRaw.replace("\r\n", "\n").replace("\r", "\n");
-
-        // 2. Unir palabras cortadas con guion al final de línea
-        //    Ej: "trans-\nlate" → "translate"
-        texto = texto.replaceAll("-\\n([a-záéíóúüña-z])", "$1");
-
-        // 3. Separar el texto en líneas para procesarlas
         String[] lineas = texto.split("\n");
-
         List<String> parrafos = new ArrayList<>();
         StringBuilder parrafoActual = new StringBuilder();
 
-        for (int i = 0; i < lineas.length; i++) {
-            String linea = lineas[i].trim();
-
-            // Ignorar líneas vacías o de un solo carácter (basura OCR)
-            if (linea.length() <= 1) {
-                // Línea vacía → fin de párrafo
+        for (String linea : lineas) {
+            linea = linea.trim();
+            if (linea.isEmpty()) {
                 if (parrafoActual.length() > 0) {
                     parrafos.add(parrafoActual.toString().trim());
                     parrafoActual = new StringBuilder();
                 }
                 continue;
             }
-
-            // Ignorar líneas que parecen ruido (más del 40% son símbolos raros)
             if (esBasura(linea)) continue;
 
-            // Decidir si esta línea continúa el párrafo anterior o empieza uno nuevo
             if (parrafoActual.length() == 0) {
-                // Inicio de párrafo nuevo
                 parrafoActual.append(linea);
             } else {
-                String ultimaLinea = obtenerUltimaLinea(parrafoActual.toString());
-                boolean terminaEnPunto = ultimaLinea.matches(".*[.!?:;]\\s*$");
-                boolean siguienteEsMayuscula = linea.length() > 0
-                        && Character.isUpperCase(linea.charAt(0));
-                boolean lineaCorta = linea.split("\\s+").length <= 3;
-
-                if (terminaEnPunto && siguienteEsMayuscula) {
-                    // La línea anterior terminó oración → nuevo párrafo
-                    parrafos.add(parrafoActual.toString().trim());
-                    parrafoActual = new StringBuilder(linea);
-                } else if (lineaCorta && siguienteEsMayuscula) {
-                    // Línea muy corta seguida de mayúscula → probablemente título o sección
+                if (parrafoActual.toString().matches(".*[.!?:;]\\s*$") && Character.isUpperCase(linea.charAt(0))) {
                     parrafos.add(parrafoActual.toString().trim());
                     parrafoActual = new StringBuilder(linea);
                 } else {
-                    // Misma oración, unir con espacio
                     parrafoActual.append(" ").append(linea);
                 }
             }
         }
+        if (parrafoActual.length() > 0) parrafos.add(parrafoActual.toString().trim());
 
-        // Agregar el último párrafo si quedó pendiente
-        if (parrafoActual.length() > 0) {
-            parrafos.add(parrafoActual.toString().trim());
-        }
-
-        // 4. Limpiar cada párrafo
-        List<String> parrafosLimpios = new ArrayList<>();
+        List<String> finales = new ArrayList<>();
         for (String p : parrafos) {
-            String limpio = limpiarParrafo(p);
-            if (!limpio.isEmpty()) {
-                parrafosLimpios.add(limpio);
+            String s = p.replaceAll("\\s+([.!?,;:)])", "$1");
+            if (s.length() > 0) {
+                s = Character.toUpperCase(s.charAt(0)) + s.substring(1);
+                finales.add(s);
             }
         }
-
-        // 5. Unir párrafos con doble salto de línea
-        return String.join("\n\n", parrafosLimpios);
+        return String.join("\n\n", finales);
     }
 
-    /**
-     * Limpieza interna de un párrafo:
-     * - Espacios múltiples → uno solo
-     * - Espacios antes de puntuación
-     * - Capitalizar primera letra
-     */
-    private static String limpiarParrafo(String parrafo) {
-        if (parrafo.isEmpty()) return "";
-
-        // Espacios múltiples → uno
-        String s = parrafo.replaceAll("\\s{2,}", " ").trim();
-
-        // Quitar espacio antes de puntuación (ej: "hola ." → "hola.")
-        s = s.replaceAll("\\s+([.!?,;:)])", "$1");
-
-        // Quitar espacio después de apertura de paréntesis
-        s = s.replaceAll("([(\\[{])\\s+", "$1");
-
-        // Capitalizar primera letra del párrafo si no lo está
-        if (s.length() > 0 && Character.isLowerCase(s.charAt(0))) {
-            s = Character.toUpperCase(s.charAt(0)) + s.substring(1);
-        }
-
-        return s;
-    }
-
-    /**
-     * Detecta si una línea es "basura" del OCR:
-     * más del 40% de sus caracteres son no-alfanuméricos ni espacios.
-     */
     private static boolean esBasura(String linea) {
-        if (linea.length() < 3) return true;
+        if (linea.length() < 2) return true;
         int raros = 0;
         for (char c : linea.toCharArray()) {
-            if (!Character.isLetterOrDigit(c) && c != ' ' && c != '.' && c != ','
-                    && c != '!' && c != '?' && c != ':' && c != ';'
-                    && c != '-' && c != '\'' && c != '"' && c != '('
-                    && c != ')' && c != '%' && c != '$' && c != '@') {
+            if (!Character.isLetterOrDigit(c) && !Character.isWhitespace(c) 
+                && ".,!?:;-_'\"()%@$".indexOf(c) == -1) {
                 raros++;
             }
         }
         return (double) raros / linea.length() > 0.4;
-    }
-
-    private static String obtenerUltimaLinea(String texto) {
-        int ultimo = texto.lastIndexOf('\n');
-        return ultimo >= 0 ? texto.substring(ultimo + 1) : texto;
-    }
-
-    /**
-     * Versión para live preview: limpieza rápida sin reorganizar párrafos,
-     * solo elimina ruido y espacios extra para no afectar el rendimiento.
-     */
-    public static String formatearLive(String textoRaw) {
-        if (textoRaw == null || textoRaw.trim().isEmpty()) return "";
-
-        String[] lineas = textoRaw.split("\n");
-        List<String> resultado = new ArrayList<>();
-
-        for (String linea : lineas) {
-            linea = linea.trim();
-            if (linea.length() > 1 && !esBasura(linea)) {
-                // Limpiar espacios múltiples
-                linea = linea.replaceAll("\\s{2,}", " ");
-                resultado.add(linea);
-            }
-        }
-
-        return String.join("\n", resultado);
     }
 }
