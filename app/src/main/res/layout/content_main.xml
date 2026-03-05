@@ -13,7 +13,6 @@
         android:orientation="horizontal"
         app:layout_constraintGuide_percent="0.58" />
 
-    <!-- Zona de cámara e imagen -->
     <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/cameraFrame"
         android:layout_width="0dp"
@@ -54,6 +53,7 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
+        <!-- Marco del OCR ajustable -->
         <View
             android:id="@+id/scannerFrame"
             android:layout_width="300dp"
@@ -64,17 +64,30 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
+        <!-- Handle para redimensionar el marco -->
+        <ImageView
+            android:id="@+id/resizeHandle"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:src="@android:drawable/ic_menu_crop"
+            android:padding="4dp"
+            android:background="#80000000"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="@id/scannerFrame"
+            app:layout_constraintEnd_toEndOf="@id/scannerFrame"
+            app:tint="#64B5F6" />
+
+        <!-- OverlayContainer ahora mide lo mismo que scannerFrame -->
         <FrameLayout
             android:id="@+id/overlayContainer"
-            android:layout_width="300dp"
-            android:layout_height="200dp"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
             android:visibility="gone"
             app:layout_constraintTop_toTopOf="@id/scannerFrame"
             app:layout_constraintBottom_toBottomOf="@id/scannerFrame"
             app:layout_constraintStart_toStartOf="@id/scannerFrame"
             app:layout_constraintEnd_toEndOf="@id/scannerFrame" />
 
-        <!-- Botón de cambio de idioma en la esquina superior izquierda -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnCambiarIdioma"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
@@ -98,26 +111,6 @@
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintStart_toStartOf="parent" />
 
-        <!-- Botón Ver Original AL LADO del botón de idioma -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnVerOriginal"
-            style="@style/Widget.MaterialComponents.Button.TextButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:text="Ver Original"
-            android:textColor="#FFFFFF"
-            android:backgroundTint="#80000000"
-            android:textSize="10sp"
-            android:visibility="gone"
-            app:cornerRadius="20dp"
-            android:paddingStart="12dp"
-            android:paddingEnd="12dp"
-            app:layout_constraintTop_toTopOf="@id/btnCambiarIdioma"
-            app:layout_constraintBottom_toBottomOf="@id/btnCambiarIdioma"
-            app:layout_constraintStart_toEndOf="@id/btnCambiarIdioma" />
-
-        <!-- Badge de Modo en la esquina superior derecha -->
         <TextView
             android:id="@+id/badgeModo"
             android:layout_width="wrap_content"
@@ -136,7 +129,24 @@
             app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
-        <!-- Botones inferiores -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnVerOriginal"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="Ver Original"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#80000000"
+            android:textSize="10sp"
+            android:visibility="gone"
+            app:cornerRadius="20dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            app:layout_constraintTop_toTopOf="@id/btnCambiarIdioma"
+            app:layout_constraintBottom_toBottomOf="@id/btnCambiarIdioma"
+            app:layout_constraintStart_toEndOf="@id/btnCambiarIdioma" />
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -200,7 +210,6 @@
         </LinearLayout>
     </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <!-- Panel de resultados -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/controlsCard"
         android:layout_width="0dp"

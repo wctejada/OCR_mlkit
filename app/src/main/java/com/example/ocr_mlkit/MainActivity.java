@@ -16,6 +16,7 @@ import android.os.Bundle;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.util.TypedValue;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.FrameLayout;
@@ -119,6 +120,7 @@ public class MainActivity extends AppCompatActivity {
 
         cameraExecutor = Executors.newSingleThreadExecutor();
         configurarBotones();
+        configurarMarcoAjustable();
         solicitarPermisoYArrancar();
     }
 
@@ -203,6 +205,9 @@ public class MainActivity extends AppCompatActivity {
             binding.contentMain.btnReanudar.setVisibility(esCongelado || esGaleria || bloqueadoPorTraduccion ? View.VISIBLE : View.GONE);
             binding.contentMain.btnGaleria.setVisibility((MODO_LIVE.equals(modoInicio) && esLive && !bloqueadoPorTraduccion) ? View.VISIBLE : View.GONE);
             
+            // Handle de ajuste siempre visible excepto cuando la traducción está bloqueando la pantalla
+            binding.contentMain.resizeHandle.setVisibility(!bloqueadoPorTraduccion ? View.VISIBLE : View.GONE);
+
             if (!lineasDetectadas.isEmpty()) {
                 binding.contentMain.overlayContainer.setVisibility(View.VISIBLE);
                 binding.contentMain.btnTraducir.setVisibility(ultimoTextoTraducido.isEmpty() ? View.VISIBLE : View.GONE);
@@ -215,6 +220,54 @@ public class MainActivity extends AppCompatActivity {
             binding.contentMain.imgCapturada.setVisibility(esLive ? View.GONE : View.VISIBLE);
             if (esGaleria) binding.contentMain.imgCapturada.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
             else if (esCongelado) binding.contentMain.imgCapturada.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
+        });
+    }
+
+    private void configurarMarcoAjustable() {
+        binding.contentMain.scannerFrame.setOnTouchListener(new View.OnTouchListener() {
+            private float dX, dY;
+            @Override
+            public boolean onTouch(View view, MotionEvent event) {
+                if (bloqueadoPorTraduccion) return false;
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        dX = view.getX() - event.getRawX();
+                        dY = view.getY() - event.getRawY();
+                        view.performClick();
+                        break;
+                    case MotionEvent.ACTION_MOVE:
+                        view.setX(event.getRawX() + dX);
+                        view.setY(event.getRawY() + dY);
+                        break;
+                }
+                return true;
+            }
+        });
+
+        binding.contentMain.resizeHandle.setOnTouchListener(new View.OnTouchListener() {
+            private float lastX, lastY;
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (bloqueadoPorTraduccion) return false;
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        lastX = event.getRawX();
+                        lastY = event.getRawY();
+                        v.performClick();
+                        break;
+                    case MotionEvent.ACTION_MOVE:
+                        float deltaX = event.getRawX() - lastX;
+                        float deltaY = event.getRawY() - lastY;
+                        ViewGroup.LayoutParams params = binding.contentMain.scannerFrame.getLayoutParams();
+                        params.width = Math.max(dpToPx(100), params.width + (int)deltaX);
+                        params.height = Math.max(dpToPx(80), params.height + (int)deltaY);
+                        binding.contentMain.scannerFrame.setLayoutParams(params);
+                        lastX = event.getRawX();
+                        lastY = event.getRawY();
+                        break;
+                }
+                return true;
+            }
         });
     }
 
@@ -370,17 +423,20 @@ public class MainActivity extends AppCompatActivity {
     private Rect obtenerRectScanner(int imgW, int imgH) {
         float viewW = binding.contentMain.cameraFrame.getWidth(), viewH = binding.contentMain.cameraFrame.getHeight();
         if (viewW == 0 || viewH == 0) return new Rect((int)(imgW*0.2), (int)(imgH*0.3), (int)(imgW*0.8), (int)(imgH*0.7));
+        
         float boxW = binding.contentMain.scannerFrame.getWidth(), boxH = binding.contentMain.scannerFrame.getHeight();
+        float boxX = binding.contentMain.scannerFrame.getX(), boxY = binding.contentMain.scannerFrame.getY();
+
         float scale = (modoActual == Modo.GALERIA) ? Math.min(viewW/imgW, viewH/imgH) : Math.max(viewW/imgW, viewH/imgH);
         float dImgW = imgW * scale, dImgH = imgH * scale;
-        float offX = (modoActual == Modo.GALERIA) ? (viewW - dImgW)/2f : (dImgW - viewW)/2f;
-        float offY = (modoActual == Modo.GALERIA) ? (viewH - dImgH)/2f : (dImgH - viewH)/2f;
+        float offX = (viewW - dImgW)/2f;
+        float offY = (viewH - dImgH)/2f;
         
-        float bL = (viewW - boxW)/2f, bT = (viewH - boxH)/2f;
-        int iL = (int)((modoActual == Modo.GALERIA) ? (bL-offX)/scale : (bL+offX)/scale);
-        int iT = (int)((modoActual == Modo.GALERIA) ? (bT-offY)/scale : (bT+offY)/scale);
-        int iR = (int)((modoActual == Modo.GALERIA) ? (bL+boxW-offX)/scale : (bL+boxW+offX)/scale);
-        int iB = (int)((modoActual == Modo.GALERIA) ? (bT+boxH-offY)/scale : (bT+boxH+offY)/scale);
+        int iL = (int)((boxX - offX)/scale);
+        int iT = (int)((boxY - offY)/scale);
+        int iR = (int)((boxX + boxW - offX)/scale);
+        int iB = (int)((boxY + boxH - offY)/scale);
+
         return new Rect(Math.max(0, iL), Math.max(0, iT), Math.min(imgW, iR), Math.min(imgH, iB));
     }
 
