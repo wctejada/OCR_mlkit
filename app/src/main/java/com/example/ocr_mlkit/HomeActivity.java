@@ -5,6 +5,7 @@ import android.animation.AnimatorListenerAdapter;
 import android.content.Intent;
 import android.os.Bundle;
 import android.view.View;
+import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
@@ -30,19 +31,16 @@ public class HomeActivity extends AppCompatActivity {
     private ImageView iconEstado;
     private CardView btnIrLive;
     private CardView btnIrGaleria;
+    private ImageButton btnAjustes;
 
-    // Estados posibles del modelo
     private enum EstadoModelo { VERIFICANDO, DESCARGANDO, LISTO, ERROR }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_home);
-
         bindViews();
         configurarBotones();
-
-        // Al abrir la app, verificar estado del modelo
         verificarModelo();
     }
 
@@ -55,23 +53,24 @@ public class HomeActivity extends AppCompatActivity {
         iconEstado       = findViewById(R.id.iconEstado);
         btnIrLive        = findViewById(R.id.btnIrLive);
         btnIrGaleria     = findViewById(R.id.btnIrGaleria);
+        btnAjustes       = findViewById(R.id.btnAjustes);
     }
 
     private void configurarBotones() {
-        btnIrLive.setOnClickListener(v -> {
-            Intent intent = new Intent(this, MainActivity.class);
-            intent.putExtra(MainActivity.EXTRA_MODO, MainActivity.MODO_LIVE);
-            startActivity(intent);
-        });
+        btnIrLive.setOnClickListener(v ->
+                startActivity(new Intent(this, MainActivity.class)
+                        .putExtra(MainActivity.EXTRA_MODO, MainActivity.MODO_LIVE)));
 
-        btnIrGaleria.setOnClickListener(v -> {
-            Intent intent = new Intent(this, MainActivity.class);
-            intent.putExtra(MainActivity.EXTRA_MODO, MainActivity.MODO_GALERIA);
-            startActivity(intent);
-        });
+        btnIrGaleria.setOnClickListener(v ->
+                startActivity(new Intent(this, MainActivity.class)
+                        .putExtra(MainActivity.EXTRA_MODO, MainActivity.MODO_GALERIA)));
+
+        // Ajustes ahora vive en el Home
+        btnAjustes.setOnClickListener(v ->
+                startActivity(new Intent(this, SettingsActivity.class)));
     }
 
-    // ── Lógica de verificación y descarga ────────────────────────────────────
+    // ── Verificación y descarga ───────────────────────────────────────────────
 
     private void verificarModelo() {
         actualizarEstado(EstadoModelo.VERIFICANDO);
@@ -83,17 +82,12 @@ public class HomeActivity extends AppCompatActivity {
         manager.isModelDownloaded(modeloES)
                 .addOnSuccessListener(descargado -> {
                     if (descargado) {
-                        // Modelo ya listo → mostrar botones directamente
                         actualizarEstado(EstadoModelo.LISTO);
                     } else {
-                        // Falta el modelo → descargar
                         descargarModelo();
                     }
                 })
-                .addOnFailureListener(e -> {
-                    // No se pudo verificar → intentar descargar de todas formas
-                    descargarModelo();
-                });
+                .addOnFailureListener(e -> descargarModelo());
     }
 
     private void descargarModelo() {
@@ -105,9 +99,7 @@ public class HomeActivity extends AppCompatActivity {
                 .build();
         Translator translator = Translation.getClient(options);
 
-        DownloadConditions conditions = new DownloadConditions.Builder().build();
-
-        translator.downloadModelIfNeeded(conditions)
+        translator.downloadModelIfNeeded(new DownloadConditions.Builder().build())
                 .addOnSuccessListener(unused -> {
                     translator.close();
                     actualizarEstado(EstadoModelo.LISTO);
@@ -125,7 +117,6 @@ public class HomeActivity extends AppCompatActivity {
             switch (estado) {
 
                 case VERIFICANDO:
-                    // Mostrar bloque de descarga, deshabilitar botones
                     layoutDescarga.setVisibility(View.VISIBLE);
                     progressDescarga.setVisibility(View.VISIBLE);
                     iconEstado.setImageResource(android.R.drawable.stat_sys_download);
@@ -139,29 +130,26 @@ public class HomeActivity extends AppCompatActivity {
                 case DESCARGANDO:
                     layoutDescarga.setVisibility(View.VISIBLE);
                     progressDescarga.setVisibility(View.VISIBLE);
-                    iconEstado.setImageResource(android.R.drawable.stat_sys_download_done);
+                    iconEstado.setImageResource(android.R.drawable.stat_sys_download);
                     iconEstado.setColorFilter(
                             getResources().getColor(android.R.color.holo_blue_light));
                     txtEstadoModelo.setText("Descargando modelo de traducción...");
-                    txtAyudaDescarga.setText("Esto solo ocurre la primera vez");
+                    txtAyudaDescarga.setText("Esto solo ocurre la primera vez  ·  ~20 MB");
                     deshabilitarBotones();
                     break;
 
                 case LISTO:
-                    // Animar: ocultar bloque de descarga → mostrar botones habilitados
                     mostrarModeloListo();
                     break;
 
                 case ERROR:
-                    layoutDescarga.setVisibility(View.VISIBLE);
                     progressDescarga.setVisibility(View.GONE);
                     iconEstado.setImageResource(android.R.drawable.ic_dialog_alert);
                     iconEstado.setColorFilter(
                             getResources().getColor(android.R.color.holo_orange_light));
                     txtEstadoModelo.setText("No se pudo descargar el modelo");
                     txtAyudaDescarga.setText(
-                            "Verifica tu conexión. La traducción no estará disponible.");
-                    // Habilitar botones igual, el usuario puede usar OCR sin traducción
+                            "Verifica tu conexión. El OCR funciona sin traducción.");
                     habilitarBotones();
                     break;
             }
@@ -169,7 +157,6 @@ public class HomeActivity extends AppCompatActivity {
     }
 
     private void mostrarModeloListo() {
-        // Cambiar ícono a check verde brevemente antes de ocultar
         progressDescarga.setVisibility(View.GONE);
         iconEstado.setImageResource(android.R.drawable.checkbox_on_background);
         iconEstado.setColorFilter(
@@ -177,59 +164,49 @@ public class HomeActivity extends AppCompatActivity {
         txtEstadoModelo.setText("¡Modelo listo!");
         txtAyudaDescarga.setText("");
 
-        // Esperar 800ms mostrando el check, luego animar transición
-        layoutDescarga.postDelayed(() -> {
-            // Fade out del bloque de descarga
-            layoutDescarga.animate()
-                    .alpha(0f)
-                    .setDuration(400)
-                    .setListener(new AnimatorListenerAdapter() {
-                        @Override
-                        public void onAnimationEnd(Animator animation) {
-                            layoutDescarga.setVisibility(View.GONE);
-                            layoutDescarga.setAlpha(1f);
+        layoutDescarga.postDelayed(() ->
+                        layoutDescarga.animate()
+                                .alpha(0f)
+                                .setDuration(400)
+                                .setListener(new AnimatorListenerAdapter() {
+                                    @Override
+                                    public void onAnimationEnd(Animator animation) {
+                                        layoutDescarga.setVisibility(View.GONE);
+                                        layoutDescarga.setAlpha(1f);
 
-                            // Fade in de los botones
-                            layoutBotones.setAlpha(0f);
-                            layoutBotones.setVisibility(View.VISIBLE);
-                            layoutBotones.animate()
-                                    .alpha(1f)
-                                    .setDuration(400)
-                                    .setListener(null)
-                                    .start();
-
-                            habilitarBotones();
-                        }
-                    })
-                    .start();
-        }, 800);
+                                        layoutBotones.setAlpha(0f);
+                                        layoutBotones.setVisibility(View.VISIBLE);
+                                        layoutBotones.animate()
+                                                .alpha(1f)
+                                                .setDuration(400)
+                                                .setListener(null)
+                                                .start();
+                                        habilitarBotones();
+                                    }
+                                }).start()
+                , 800);
     }
 
     private void deshabilitarBotones() {
-        // Si ya están visibles (segunda apertura), solo bloquear clics
         btnIrLive.setClickable(false);
         btnIrGaleria.setClickable(false);
         btnIrLive.setAlpha(0.4f);
         btnIrGaleria.setAlpha(0.4f);
-
-        // Ocultar botones si aún no se han mostrado antes
-        if (layoutBotones.getVisibility() != View.VISIBLE) {
+        if (layoutBotones.getVisibility() != View.VISIBLE)
             layoutBotones.setVisibility(View.GONE);
-        }
     }
 
     private void habilitarBotones() {
+        layoutBotones.setVisibility(View.VISIBLE);
         btnIrLive.setClickable(true);
         btnIrGaleria.setClickable(true);
         btnIrLive.setAlpha(1f);
         btnIrGaleria.setAlpha(1f);
     }
 
-    // ── Al volver a la pantalla, re-verificar ─────────────────────────────────
     @Override
     protected void onResume() {
         super.onResume();
-        // Si los botones ya están visibles y clickeables, no re-verificar
         if (btnIrLive.isClickable()) return;
         verificarModelo();
     }

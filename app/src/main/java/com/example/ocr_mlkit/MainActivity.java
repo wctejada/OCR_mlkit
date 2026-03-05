@@ -6,9 +6,8 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.View;
 import android.widget.Toast;
 
@@ -54,6 +53,7 @@ public class MainActivity extends AppCompatActivity {
 
     private boolean modeloListo = false;
     private String ultimoTextoDetectado = "";
+    private String modoInicio = MODO_LIVE;
 
     private ProcessCameraProvider cameraProvider;
     private ExecutorService cameraExecutor;
@@ -79,9 +79,10 @@ public class MainActivity extends AppCompatActivity {
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         }
 
-        recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+        modoInicio = getIntent().getStringExtra(EXTRA_MODO);
+        if (modoInicio == null) modoInicio = MODO_LIVE;
 
-        // Crear el translator primero, luego verificar/descargar modelo
+        recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
         crearTranslator();
         verificarYPrepararModelo();
 
@@ -89,101 +90,37 @@ public class MainActivity extends AppCompatActivity {
         cameraExecutor = Executors.newSingleThreadExecutor();
 
         configurarBotones();
-
-        String modoInicio = getIntent().getStringExtra(EXTRA_MODO);
-        if (MODO_GALERIA.equals(modoInicio)) {
-            solicitarPermisoYArrancar();
-            abrirGaleria();
-        } else {
-            solicitarPermisoYArrancar();
-        }
+        solicitarPermisoYArrancar();
     }
 
-    // ── Traductor ─────────────────────────────────────────────────────────────
+    // ── Botones ───────────────────────────────────────────────────────────────
 
-    /** Crea la instancia del traductor (no descarga nada aquí). */
-    private void crearTranslator() {
-        TranslatorOptions options = new TranslatorOptions.Builder()
-                .setSourceLanguage(TranslateLanguage.ENGLISH)
-                .setTargetLanguage(TranslateLanguage.SPANISH)
-                .build();
-        translator = Translation.getClient(options);
+    private void configurarBotones() {
+        binding.contentMain.btnCapturar.setOnClickListener(v -> capturarFoto());
+        binding.contentMain.btnReanudar.setOnClickListener(v -> reanudarLive());
+        binding.contentMain.btnGaleria.setOnClickListener(v -> abrirGaleria());
+
+        // FAB: compartir texto traducido
+        binding.fabCompartir.setOnClickListener(v -> compartirTexto());
+
+        actualizarUI();
     }
 
-    /**
-     * Verifica si los modelos EN y ES ya están descargados localmente.
-     * - Si SÍ están → modeloListo = true de inmediato, sin descargar nada.
-     * - Si NO están → descarga y muestra progreso.
-     */
-    private void verificarYPrepararModelo() {
-        mostrarEstadoTraduccion("Verificando modelo...");
-
-        RemoteModelManager manager = RemoteModelManager.getInstance();
-        TranslateRemoteModel modeloES =
-                new TranslateRemoteModel.Builder(TranslateLanguage.SPANISH).build();
-
-        // Comprobar si el modelo español (el crítico) ya está descargado
-        manager.isModelDownloaded(modeloES)
-                .addOnSuccessListener(descargado -> {
-                    if (descargado) {
-                        // Ya existe localmente → listo de inmediato
-                        modeloListo = true;
-                        Log.d("TRAD", "Modelo ya descargado, listo para traducir");
-                        mostrarEstadoTraduccion("");
-
-                        // Si hay texto pendiente, traducirlo ya
-                        if (!ultimoTextoDetectado.isEmpty()) {
-                            traducir(ultimoTextoDetectado, false);
-                        }
-                    } else {
-                        // No existe → descargar ahora
-                        descargarModelo();
-                    }
-                })
-                .addOnFailureListener(e -> {
-                    Log.e("TRAD", "Error verificando modelo, intentando descargar", e);
-                    descargarModelo();
-                });
-    }
-
-    /** Descarga el modelo solo cuando no está disponible localmente. */
-    private void descargarModelo() {
-        mostrarEstadoTraduccion("Descargando modelo de traducción...");
-        Log.d("TRAD", "Iniciando descarga del modelo");
-
-        // Sin restricción de WiFi para facilitar la descarga
-        DownloadConditions conditions = new DownloadConditions.Builder().build();
-
-        translator.downloadModelIfNeeded(conditions)
-                .addOnSuccessListener(unused -> {
-                    modeloListo = true;
-                    Log.d("TRAD", "Modelo descargado exitosamente");
-                    mostrarEstadoTraduccion("");
-
-                    if (!ultimoTextoDetectado.isEmpty()) {
-                        traducir(ultimoTextoDetectado, false);
-                    }
-                })
-                .addOnFailureListener(e -> {
-                    Log.e("TRAD", "Fallo en descarga del modelo", e);
-                    mostrarEstadoTraduccion("⚠ Sin modelo. Verifica tu conexión.");
-                });
-    }
-
-    /** Muestra un mensaje en el campo de traducción solo si no hay traducción activa. */
-    private void mostrarEstadoTraduccion(String mensaje) {
+    private void actualizarUI() {
         runOnUiThread(() -> {
-            // Solo actualizar si el texto actual es un mensaje de estado (no una traducción real)
-            String actual = binding.contentMain.txtTraducido.getText().toString();
-            boolean esEstado = actual.isEmpty()
-                    || actual.startsWith("Verificando")
-                    || actual.startsWith("Descargando")
-                    || actual.startsWith("⚠")
-                    || actual.equals("Traduciendo...");
+            boolean esLive      = modoActual == Modo.LIVE;
+            boolean esCongelado = modoActual == Modo.CONGELADO;
 
-            if (esEstado) {
-                binding.contentMain.txtTraducido.setText(mensaje);
-            }
+            binding.contentMain.btnCapturar.setVisibility(
+                    esLive ? View.VISIBLE : View.GONE);
+            binding.contentMain.btnReanudar.setVisibility(
+                    esCongelado ? View.VISIBLE : View.GONE);
+            // Botón galería: solo si se abrió en modo LIVE y estamos en live
+            binding.contentMain.btnGaleria.setVisibility(
+                    (MODO_LIVE.equals(modoInicio) && esLive) ? View.VISIBLE : View.GONE);
+
+            if (modoActual != Modo.GALERIA)
+                binding.contentMain.previewView.setVisibility(View.VISIBLE);
         });
     }
 
@@ -192,6 +129,7 @@ public class MainActivity extends AppCompatActivity {
     private void solicitarPermisoYArrancar() {
         if (tienePermisosCamara()) {
             iniciarCamara();
+            if (MODO_GALERIA.equals(modoInicio)) abrirGaleria();
         } else {
             ActivityCompat.requestPermissions(this,
                     new String[]{
@@ -209,6 +147,7 @@ public class MainActivity extends AppCompatActivity {
                 && results.length > 0
                 && results[0] == PackageManager.PERMISSION_GRANTED) {
             iniciarCamara();
+            if (MODO_GALERIA.equals(modoInicio)) abrirGaleria();
         } else {
             Toast.makeText(this,
                     "Se necesita permiso de cámara para usar la app.",
@@ -219,15 +158,6 @@ public class MainActivity extends AppCompatActivity {
     private boolean tienePermisosCamara() {
         return ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
                 == PackageManager.PERMISSION_GRANTED;
-    }
-
-    // ── Botones ───────────────────────────────────────────────────────────────
-
-    private void configurarBotones() {
-        binding.contentMain.btnCapturar.setOnClickListener(v -> capturarFoto());
-        binding.contentMain.btnReanudar.setOnClickListener(v -> reanudarLive());
-        binding.contentMain.btnGaleria.setOnClickListener(v -> abrirGaleria());
-        actualizarUI();
     }
 
     // ── CameraX ───────────────────────────────────────────────────────────────
@@ -263,12 +193,8 @@ public class MainActivity extends AppCompatActivity {
 
         cameraProvider.unbindAll();
         cameraProvider.bindToLifecycle(
-                this,
-                CameraSelector.DEFAULT_BACK_CAMERA,
-                preview,
-                imageAnalysis,
-                imageCapture
-        );
+                this, CameraSelector.DEFAULT_BACK_CAMERA,
+                preview, imageAnalysis, imageCapture);
 
         modoActual = Modo.LIVE;
         actualizarUI();
@@ -293,7 +219,7 @@ public class MainActivity extends AppCompatActivity {
         actualizarUI();
     }
 
-    // ── Captura ───────────────────────────────────────────────────────────────
+    // ── Captura de foto ───────────────────────────────────────────────────────
 
     private void capturarFoto() {
         if (imageCapture == null) return;
@@ -365,77 +291,22 @@ public class MainActivity extends AppCompatActivity {
 
         recognizer.process(image)
                 .addOnSuccessListener(text -> {
-                    String detectedText = text.getText();
+                    String formateado = TextFormatter.formatearLive(text.getText());
                     runOnUiThread(() ->
                             binding.contentMain.txtOriginal.setText(
-                                    detectedText.isEmpty()
+                                    formateado.isEmpty()
                                             ? "Apunta la cámara al texto..."
-                                            : detectedText)
+                                            : formateado)
                     );
-                    if (!detectedText.isEmpty()
+                    if (!formateado.isEmpty()
                             && modeloListo
-                            && !detectedText.equals(ultimoTextoDetectado)) {
-                        ultimoTextoDetectado = detectedText;
-                        traducir(detectedText, false);
+                            && !formateado.equals(ultimoTextoDetectado)) {
+                        ultimoTextoDetectado = formateado;
+                        traducir(formateado, false);
                     }
                 })
                 .addOnFailureListener(e -> Log.e("LIVE_OCR", "Error", e))
                 .addOnCompleteListener(task -> imageProxy.close());
-    }
-
-    // ── OCR Bitmap ────────────────────────────────────────────────────────────
-
-    private void procesarOCRBitmap(Bitmap bitmap) {
-        InputImage image = InputImage.fromBitmap(bitmap, 0);
-
-        recognizer.process(image)
-                .addOnSuccessListener(visionText -> {
-                    StringBuilder sb = new StringBuilder();
-                    for (Text.TextBlock block : visionText.getTextBlocks())
-                        for (Text.Line line : block.getLines())
-                            sb.append(line.getText()).append("\n");
-
-                    String texto = sb.toString().trim();
-
-                    runOnUiThread(() -> {
-                        if (texto.isEmpty()) {
-                            binding.contentMain.txtOriginal.setText("No se detectó texto.");
-                            binding.contentMain.txtTraducido.setText("");
-                        } else {
-                            binding.contentMain.txtOriginal.setText(texto);
-                            if (modeloListo) {
-                                traducir(texto, true);
-                            } else {
-                                binding.contentMain.txtTraducido.setText(
-                                        "Modelo descargando, intente en un momento.");
-                            }
-                        }
-                    });
-                })
-                .addOnFailureListener(e -> {
-                    Log.e("OCR_BITMAP", "Error", e);
-                    runOnUiThread(() ->
-                            binding.contentMain.txtOriginal.setText("Error al reconocer texto."));
-                });
-    }
-
-    // ── Traducción ────────────────────────────────────────────────────────────
-
-    private void traducir(String texto, boolean mostrarCargando) {
-        if (mostrarCargando) {
-            runOnUiThread(() ->
-                    binding.contentMain.txtTraducido.setText("Traduciendo..."));
-        }
-        translator.translate(texto)
-                .addOnSuccessListener(traduccion ->
-                        runOnUiThread(() ->
-                                binding.contentMain.txtTraducido.setText(traduccion)))
-                .addOnFailureListener(e -> {
-                    Log.e("TRAD", "Error traduciendo", e);
-                    // Si falla la traducción, puede que el modelo se corrompió: reintentar descarga
-                    modeloListo = false;
-                    verificarYPrepararModelo();
-                });
     }
 
     // ── Galería ───────────────────────────────────────────────────────────────
@@ -458,59 +329,232 @@ public class MainActivity extends AppCompatActivity {
 
         if (resultCode != RESULT_OK || requestCode != REQUEST_PICK_IMAGE
                 || data == null || data.getData() == null) {
-            reanudarLive();
+            if (MODO_GALERIA.equals(modoInicio)) finish();
+            else reanudarLive();
             return;
         }
 
-        try {
-            Uri imagenUri = data.getData();
-            InputImage input = InputImage.fromFilePath(this, imagenUri);
-            Bitmap bitmap = input.getBitmapInternal();
+        Uri imagenUri = data.getData();
 
-            if (bitmap != null) {
-                binding.contentMain.imgCapturada.setImageBitmap(bitmap);
-                binding.contentMain.imgCapturada.setVisibility(View.VISIBLE);
-                binding.contentMain.previewView.setVisibility(View.GONE);
-                binding.contentMain.txtOriginal.setText("Reconociendo texto...");
-                binding.contentMain.txtTraducido.setText("");
-                procesarOCRBitmap(bitmap);
-            }
+        try {
+            // FIX 1: Cargar bitmap con ContentResolver (funciona con cualquier URI de galería)
+            // getBitmapInternal() es API interna de ML Kit y retorna null para URIs de galería
+            Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), imagenUri);
+
+            // FIX 2: Detener completamente el preview para que no se vea encima de la imagen
+            if (cameraProvider != null) cameraProvider.unbindAll();
+            binding.contentMain.previewView.setVisibility(View.GONE);
+
+            binding.contentMain.imgCapturada.setImageBitmap(bitmap);
+            binding.contentMain.imgCapturada.setVisibility(View.VISIBLE);
+            binding.contentMain.txtOriginal.setText("Reconociendo texto...");
+            binding.contentMain.txtTraducido.setText("");
+
+            // FIX 3: OCR desde URI directamente (respeta rotación EXIF de la foto)
+            procesarOCRUri(imagenUri, bitmap);
+
         } catch (IOException e) {
             Log.e("GALLERY", "Error cargando imagen", e);
             Toast.makeText(this, "Error al cargar imagen", Toast.LENGTH_SHORT).show();
-            reanudarLive();
+            if (MODO_GALERIA.equals(modoInicio)) finish();
+            else reanudarLive();
         }
     }
 
-    // ── UI dinámica ───────────────────────────────────────────────────────────
+    /**
+     * OCR desde URI usando InputImage.fromFilePath — más fiable que fromBitmap
+     * para galería porque respeta la rotación EXIF automáticamente.
+     * El bitmap solo se usa para mostrar en pantalla.
+     */
+    private void procesarOCRUri(Uri uri, Bitmap bitmapParaMostrar) {
+        try {
+            InputImage image = InputImage.fromFilePath(this, uri);
 
-    private void actualizarUI() {
+            recognizer.process(image)
+                    .addOnSuccessListener(visionText -> {
+                        StringBuilder sb = new StringBuilder();
+                        for (Text.TextBlock block : visionText.getTextBlocks()) {
+                            for (Text.Line line : block.getLines()) {
+                                sb.append(line.getText()).append("\n");
+                            }
+                            sb.append("\n");
+                        }
+                        String textoFormateado = TextFormatter.formatear(sb.toString());
+
+                        runOnUiThread(() -> {
+                            if (textoFormateado.isEmpty()) {
+                                binding.contentMain.txtOriginal.setText("No se detectó texto.");
+                                binding.contentMain.txtTraducido.setText("");
+                            } else {
+                                binding.contentMain.txtOriginal.setText(textoFormateado);
+                                if (modeloListo) {
+                                    traducir(textoFormateado, true);
+                                } else {
+                                    binding.contentMain.txtTraducido.setText(
+                                            "Modelo descargando, intente en un momento.");
+                                }
+                            }
+                        });
+                    })
+                    .addOnFailureListener(e -> {
+                        Log.e("OCR_URI", "Error", e);
+                        // Fallback: intentar desde bitmap si fromFilePath falla
+                        if (bitmapParaMostrar != null) procesarOCRBitmap(bitmapParaMostrar);
+                    });
+
+        } catch (IOException e) {
+            Log.e("OCR_URI", "Error creando InputImage desde URI", e);
+            if (bitmapParaMostrar != null) procesarOCRBitmap(bitmapParaMostrar);
+        }
+    }
+
+    // ── OCR Bitmap (captura de cámara y fallback) ─────────────────────────────
+
+    private void procesarOCRBitmap(Bitmap bitmap) {
+        InputImage image = InputImage.fromBitmap(bitmap, 0);
+
+        recognizer.process(image)
+                .addOnSuccessListener(visionText -> {
+                    StringBuilder sb = new StringBuilder();
+                    for (Text.TextBlock block : visionText.getTextBlocks()) {
+                        for (Text.Line line : block.getLines()) {
+                            sb.append(line.getText()).append("\n");
+                        }
+                        sb.append("\n");
+                    }
+                    String textoFormateado = TextFormatter.formatear(sb.toString());
+
+                    runOnUiThread(() -> {
+                        if (textoFormateado.isEmpty()) {
+                            binding.contentMain.txtOriginal.setText("No se detectó texto.");
+                            binding.contentMain.txtTraducido.setText("");
+                        } else {
+                            binding.contentMain.txtOriginal.setText(textoFormateado);
+                            if (modeloListo) {
+                                traducir(textoFormateado, true);
+                            } else {
+                                binding.contentMain.txtTraducido.setText(
+                                        "Modelo descargando, intente en un momento.");
+                            }
+                        }
+                    });
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("OCR_BITMAP", "Error", e);
+                    runOnUiThread(() ->
+                            binding.contentMain.txtOriginal.setText("Error al reconocer texto."));
+                });
+    }
+
+    // ── Traducción ────────────────────────────────────────────────────────────
+
+    private void traducir(String texto, boolean mostrarCargando) {
+        if (mostrarCargando)
+            runOnUiThread(() ->
+                    binding.contentMain.txtTraducido.setText("Traduciendo..."));
+
+        translator.translate(texto)
+                .addOnSuccessListener(traduccion -> {
+                    String traduccionFormateada = TextFormatter.formatear(traduccion);
+                    runOnUiThread(() ->
+                            binding.contentMain.txtTraducido.setText(
+                                    traduccionFormateada.isEmpty() ? traduccion : traduccionFormateada));
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("TRAD", "Error traduciendo", e);
+                    modeloListo = false;
+                    verificarYPrepararModelo();
+                });
+    }
+
+    private void crearTranslator() {
+        TranslatorOptions options = new TranslatorOptions.Builder()
+                .setSourceLanguage(TranslateLanguage.ENGLISH)
+                .setTargetLanguage(TranslateLanguage.SPANISH)
+                .build();
+        translator = Translation.getClient(options);
+    }
+
+    private void verificarYPrepararModelo() {
+        mostrarEstadoTraduccion("Verificando modelo...");
+
+        RemoteModelManager manager = RemoteModelManager.getInstance();
+        TranslateRemoteModel modeloES =
+                new TranslateRemoteModel.Builder(TranslateLanguage.SPANISH).build();
+
+        manager.isModelDownloaded(modeloES)
+                .addOnSuccessListener(descargado -> {
+                    if (descargado) {
+                        modeloListo = true;
+                        mostrarEstadoTraduccion("");
+                        if (!ultimoTextoDetectado.isEmpty())
+                            traducir(ultimoTextoDetectado, false);
+                    } else {
+                        descargarModelo();
+                    }
+                })
+                .addOnFailureListener(e -> descargarModelo());
+    }
+
+    private void descargarModelo() {
+        mostrarEstadoTraduccion("Descargando modelo de traducción...");
+        translator.downloadModelIfNeeded(new DownloadConditions.Builder().build())
+                .addOnSuccessListener(unused -> {
+                    modeloListo = true;
+                    mostrarEstadoTraduccion("");
+                    if (!ultimoTextoDetectado.isEmpty())
+                        traducir(ultimoTextoDetectado, false);
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("TRAD", "Fallo en descarga del modelo", e);
+                    mostrarEstadoTraduccion("⚠ Sin modelo. Verifica tu conexión.");
+                });
+    }
+
+    private void mostrarEstadoTraduccion(String mensaje) {
         runOnUiThread(() -> {
-            boolean enLive = modoActual == Modo.LIVE;
-            binding.contentMain.btnCapturar.setVisibility(enLive ? View.VISIBLE : View.GONE);
-            binding.contentMain.btnReanudar.setVisibility(enLive ? View.GONE : View.VISIBLE);
-            if (modoActual != Modo.GALERIA)
-                binding.contentMain.previewView.setVisibility(View.VISIBLE);
+            String actual = binding.contentMain.txtTraducido.getText().toString();
+            boolean esEstado = actual.isEmpty()
+                    || actual.startsWith("Verificando")
+                    || actual.startsWith("Descargando")
+                    || actual.startsWith("⚠")
+                    || actual.equals("Traduciendo...");
+            if (esEstado) binding.contentMain.txtTraducido.setText(mensaje);
         });
     }
 
-    // ── Menú y ciclo de vida ──────────────────────────────────────────────────
+    // ── Ciclo de vida ─────────────────────────────────────────────────────────
 
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        getMenuInflater().inflate(R.menu.menu_main, menu);
-        return true;
+
+    // ── Compartir ─────────────────────────────────────────────────────────────
+
+    private void compartirTexto() {
+        String traducido = binding.contentMain.txtTraducido.getText().toString().trim();
+        String original  = binding.contentMain.txtOriginal.getText().toString().trim();
+
+        // No compartir si no hay contenido real
+        if (traducido.isEmpty() || traducido.startsWith("Traduciendo")
+                || traducido.startsWith("Verificando") || traducido.startsWith("Descargando")
+                || traducido.startsWith("⚠")) {
+            Toast.makeText(this, "No hay traducción para compartir", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String textoCompartir =
+                "--- Texto original ---\n" + original +
+                        "\n\n--- Traducción ---\n" + traducido;
+
+        Intent shareIntent = new Intent(Intent.ACTION_SEND);
+        shareIntent.setType("text/plain");
+        shareIntent.putExtra(Intent.EXTRA_TEXT, textoCompartir);
+
+        startActivity(Intent.createChooser(shareIntent, "Compartir traducción"));
     }
 
     @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        int id = item.getItemId();
-        if (id == android.R.id.home) {
+    public boolean onOptionsItemSelected(android.view.MenuItem item) {
+        if (item.getItemId() == android.R.id.home) {
             finish();
-            return true;
-        }
-        if (id == R.id.action_settings) {
-            startActivity(new Intent(this, SettingsActivity.class));
             return true;
         }
         return super.onOptionsItemSelected(item);

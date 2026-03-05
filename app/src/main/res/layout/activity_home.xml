@@ -6,7 +6,6 @@
     android:layout_height="match_parent"
     android:background="#0D0D0D">
 
-    <!-- Círculo decorativo superior -->
     <View
         android:id="@+id/circleTop"
         android:layout_width="320dp"
@@ -18,7 +17,6 @@
         android:layout_marginTop="-80dp"
         android:layout_marginEnd="-80dp" />
 
-    <!-- Círculo decorativo inferior -->
     <View
         android:id="@+id/circleBottom"
         android:layout_width="200dp"
@@ -30,7 +28,20 @@
         android:layout_marginBottom="-60dp"
         android:layout_marginStart="-60dp" />
 
-    <!-- Ícono -->
+    <!-- Botón ajustes esquina superior derecha -->
+    <ImageButton
+        android:id="@+id/btnAjustes"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:src="@android:drawable/ic_menu_preferences"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        app:tint="#888888"
+        android:contentDescription="Ajustes"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp" />
+
     <ImageView
         android:id="@+id/appIcon"
         android:layout_width="72dp"
@@ -42,7 +53,6 @@
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="72dp" />
 
-    <!-- Nombre -->
     <TextView
         android:id="@+id/txtAppName"
         android:layout_width="wrap_content"
@@ -57,7 +67,6 @@
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="16dp" />
 
-    <!-- Subtítulo -->
     <TextView
         android:id="@+id/txtSubtitle"
         android:layout_width="wrap_content"
@@ -71,7 +80,6 @@
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="6dp" />
 
-    <!-- Línea decorativa -->
     <View
         android:id="@+id/divider"
         android:layout_width="40dp"
@@ -82,45 +90,38 @@
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="20dp" />
 
-    <!-- ══════════════════════════════════════════
-         BLOQUE DE ESTADO DEL MODELO
-         Visible mientras descarga / invisible cuando listo
-         ══════════════════════════════════════════ -->
+    <!-- Bloque de descarga -->
     <LinearLayout
         android:id="@+id/layoutDescarga"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:orientation="vertical"
+        android:gravity="center"
+        android:visibility="gone"
         android:layout_marginStart="32dp"
         android:layout_marginEnd="32dp"
         android:layout_marginTop="40dp"
-        android:gravity="center"
-        android:visibility="gone"
         app:layout_constraintTop_toBottomOf="@id/divider"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Ícono de estado (nube descargando / check) -->
         <ImageView
             android:id="@+id/iconEstado"
             android:layout_width="36dp"
             android:layout_height="36dp"
             android:src="@android:drawable/stat_sys_download"
-            app:tint="#64B5F6"
             android:layout_marginBottom="12dp" />
 
-        <!-- Texto de estado -->
         <TextView
             android:id="@+id/txtEstadoModelo"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Preparando modelo de traducción..."
+            android:text="Verificando modelo..."
             android:textColor="#CCCCCC"
             android:textSize="14sp"
             android:gravity="center"
             android:layout_marginBottom="16dp" />
 
-        <!-- Barra de progreso indeterminada mientras descarga -->
         <ProgressBar
             android:id="@+id/progressDescarga"
             style="@style/Widget.AppCompat.ProgressBar.Horizontal"
@@ -129,24 +130,20 @@
             android:indeterminate="true"
             android:progressTint="#1976D2"
             android:progressBackgroundTint="#333333"
-            android:layout_marginBottom="8dp" />
+            android:layout_marginBottom="12dp" />
 
-        <!-- Texto pequeño de ayuda -->
         <TextView
             android:id="@+id/txtAyudaDescarga"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Esto solo ocurre la primera vez"
+            android:text="Esto solo ocurre la primera vez  ·  ~20 MB"
             android:textColor="#555555"
             android:textSize="12sp"
             android:gravity="center" />
 
     </LinearLayout>
 
-    <!-- ══════════════════════════════════════════
-         BOTONES PRINCIPALES
-         Deshabilitados mientras descarga
-         ══════════════════════════════════════════ -->
+    <!-- Botones principales -->
     <LinearLayout
         android:id="@+id/layoutBotones"
         android:layout_width="0dp"
@@ -155,11 +152,12 @@
         android:layout_marginStart="24dp"
         android:layout_marginEnd="24dp"
         android:layout_marginTop="40dp"
+        android:visibility="gone"
         app:layout_constraintTop_toBottomOf="@id/layoutDescarga"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <!-- Botón Cámara en vivo -->
+        <!-- Cámara en vivo -->
         <androidx.cardview.widget.CardView
             android:id="@+id/btnIrLive"
             android:layout_width="0dp"
@@ -178,7 +176,6 @@
                 android:layout_height="match_parent">
 
                 <View
-                    android:id="@+id/stripeLive"
                     android:layout_width="match_parent"
                     android:layout_height="4dp"
                     android:background="#1976D2"
@@ -190,11 +187,10 @@
                     android:layout_height="44dp"
                     android:src="@android:drawable/ic_menu_camera"
                     app:tint="#64B5F6"
-                    app:layout_constraintTop_toBottomOf="@id/stripeLive"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
                     app:layout_constraintBottom_toTopOf="@+id/txtLiveLabel"
-                    android:layout_marginTop="8dp" />
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent" />
 
                 <TextView
                     android:id="@+id/txtLiveLabel"
@@ -213,7 +209,7 @@
             </androidx.constraintlayout.widget.ConstraintLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- Botón Galería -->
+        <!-- Galería -->
         <androidx.cardview.widget.CardView
             android:id="@+id/btnIrGaleria"
             android:layout_width="0dp"
@@ -232,7 +228,6 @@
                 android:layout_height="match_parent">
 
                 <View
-                    android:id="@+id/stripeGaleria"
                     android:layout_width="match_parent"
                     android:layout_height="4dp"
                     android:background="#7B1FA2"
@@ -244,11 +239,10 @@
                     android:layout_height="44dp"
                     android:src="@android:drawable/ic_menu_gallery"
                     app:tint="#CE93D8"
-                    app:layout_constraintTop_toBottomOf="@id/stripeGaleria"
-                    app:layout_constraintStart_toStartOf="parent"
-                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
                     app:layout_constraintBottom_toTopOf="@+id/txtGaleriaLabel"
-                    android:layout_marginTop="8dp" />
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent" />
 
                 <TextView
                     android:id="@+id/txtGaleriaLabel"
@@ -269,7 +263,6 @@
 
     </LinearLayout>
 
-    <!-- Texto inferior -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

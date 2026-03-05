@@ -2,13 +2,10 @@
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-    <!-- Guideline horizontal al 58% de la pantalla -->
-    <!-- La cámara ocupa del top hasta aquí, los resultados desde aquí hasta el bottom -->
     <androidx.constraintlayout.widget.Guideline
         android:id="@+id/guideline"
         android:layout_width="wrap_content"
@@ -16,9 +13,7 @@
         android:orientation="horizontal"
         app:layout_constraintGuide_percent="0.58" />
 
-    <!-- ══════════════════════════════════════════════════════
-         ZONA DE CÁMARA  (58% superior)
-         ══════════════════════════════════════════════════════ -->
+    <!-- Zona de cámara -->
     <FrameLayout
         android:id="@+id/cameraFrame"
         android:layout_width="0dp"
@@ -28,13 +23,11 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toTopOf="@id/guideline">
 
-        <!-- Live preview (siempre de fondo) -->
         <androidx.camera.view.PreviewView
             android:id="@+id/previewView"
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-        <!-- Imagen congelada (captura / galería), encima del preview -->
         <ImageView
             android:id="@+id/imgCapturada"
             android:layout_width="match_parent"
@@ -43,7 +36,6 @@
             android:contentDescription="@string/scan_image_description"
             android:visibility="gone" />
 
-        <!-- Badge de estado en esquina superior derecha -->
         <TextView
             android:id="@+id/badgeModo"
             android:layout_width="wrap_content"
@@ -60,7 +52,7 @@
             android:textSize="12sp"
             android:textStyle="bold" />
 
-        <!-- Botones flotantes en la parte inferior de la cámara -->
+        <!-- Botones flotantes -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -69,19 +61,20 @@
             android:padding="12dp"
             android:gravity="center">
 
-            <!-- Capturar (solo en modo LIVE) -->
+            <!-- Capturar: solo en modo LIVE -->
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/btnCapturar"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="24dp"
                 android:contentDescription="Capturar foto"
+                android:visibility="gone"
                 app:srcCompat="@android:drawable/ic_menu_camera"
                 app:tint="@android:color/white"
                 app:backgroundTint="#CC1976D2"
                 app:fabSize="normal" />
 
-            <!-- Reanudar (cuando está congelado / galería) -->
+            <!-- Reanudar: cuando está congelado -->
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/btnReanudar"
                 android:layout_width="wrap_content"
@@ -94,12 +87,19 @@
                 app:backgroundTint="#CC388E3C"
                 app:fabSize="normal" />
 
-            <!-- Galería (siempre visible) -->
+            <!--
+                btnGaleria: se muestra SOLO en modo LIVE (controlado desde MainActivity)
+                btnVolverHome: se muestra SOLO en modo GALERIA (controlado desde MainActivity)
+                Ambos se ocultan/muestran según el EXTRA_MODO recibido
+            -->
+
+            <!-- Galería: visible solo en modo LIVE -->
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/btnGaleria"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:contentDescription="Abrir galería"
+                android:visibility="gone"
                 app:srcCompat="@android:drawable/ic_menu_gallery"
                 app:tint="@android:color/white"
                 app:backgroundTint="#CC7B1FA2"
@@ -108,9 +108,7 @@
         </LinearLayout>
     </FrameLayout>
 
-    <!-- ══════════════════════════════════════════════════════
-         PANEL DE RESULTADOS  (42% inferior)
-         ══════════════════════════════════════════════════════ -->
+    <!-- Panel de resultados -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/controlsCard"
         android:layout_width="0dp"
