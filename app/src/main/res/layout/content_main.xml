@@ -64,30 +64,30 @@
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
 
-        <!-- Handle para redimensionar el marco -->
-        <ImageView
-            android:id="@+id/resizeHandle"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:src="@android:drawable/ic_menu_crop"
-            android:padding="4dp"
-            android:background="#80000000"
-            android:visibility="gone"
-            app:layout_constraintBottom_toBottomOf="@id/scannerFrame"
-            app:layout_constraintEnd_toEndOf="@id/scannerFrame"
-            app:tint="#64B5F6" />
-
-        <!-- OverlayContainer ahora mide lo mismo que scannerFrame -->
+        <!-- El overlayContainer ahora cubre TODA el área de la cámara para dibujo absoluto -->
         <FrameLayout
             android:id="@+id/overlayContainer"
             android:layout_width="0dp"
             android:layout_height="0dp"
             android:visibility="gone"
-            app:layout_constraintTop_toTopOf="@id/scannerFrame"
-            app:layout_constraintBottom_toBottomOf="@id/scannerFrame"
-            app:layout_constraintStart_toStartOf="@id/scannerFrame"
-            app:layout_constraintEnd_toEndOf="@id/scannerFrame" />
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
 
+        <ImageView
+            android:id="@+id/resizeHandle"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:src="@android:drawable/ic_menu_crop"
+            android:padding="8dp"
+            android:background="#40000000"
+            android:visibility="gone"
+            app:layout_constraintBottom_toBottomOf="@id/scannerFrame"
+            app:layout_constraintEnd_toEndOf="@id/scannerFrame"
+            app:tint="#64B5F6" />
+
+        <!-- Botones de control -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnCambiarIdioma"
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
@@ -147,6 +147,7 @@
             app:layout_constraintBottom_toBottomOf="@id/btnCambiarIdioma"
             app:layout_constraintStart_toEndOf="@id/btnCambiarIdioma" />
 
+        <!-- Botones inferiores -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -162,12 +163,11 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="16dp"
-                android:contentDescription="Capturar foto"
+                android:contentDescription="Capturar"
                 android:visibility="gone"
                 app:srcCompat="@android:drawable/ic_menu_camera"
                 app:tint="@android:color/white"
-                app:backgroundTint="#CC1976D2"
-                app:fabSize="normal" />
+                app:backgroundTint="#CC1976D2" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnTraducir"
@@ -189,24 +189,21 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginEnd="16dp"
-                android:contentDescription="Reanudar live"
+                android:contentDescription="Reanudar"
                 android:visibility="gone"
                 app:srcCompat="@android:drawable/ic_media_play"
                 app:tint="@android:color/white"
-                app:backgroundTint="#CC388E3C"
-                app:fabSize="normal" />
+                app:backgroundTint="#CC388E3C" />
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/btnGaleria"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:contentDescription="Abrir galería"
+                android:contentDescription="Galería"
                 android:visibility="gone"
                 app:srcCompat="@android:drawable/ic_menu_gallery"
                 app:tint="@android:color/white"
-                app:backgroundTint="#CC7B1FA2"
-                app:fabSize="normal" />
-
+                app:backgroundTint="#CC7B1FA2" />
         </LinearLayout>
     </androidx.constraintlayout.widget.ConstraintLayout>
 
@@ -224,56 +221,15 @@
         <ScrollView
             android:layout_width="match_parent"
             android:layout_height="match_parent">
-
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:padding="16dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Texto detectado"
-                    android:textSize="11sp"
-                    android:textColor="#888888"
-                    android:textAllCaps="true"
-                    android:letterSpacing="0.1"
-                    android:layout_marginBottom="4dp" />
-
-                <TextView
-                    android:id="@+id/txtOriginal"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="60dp"
-                    android:background="#1A000000"
-                    android:padding="12dp"
-                    android:text="Apunta la cámara al texto..."
-                    android:textColor="?attr/colorOnSurface"
-                    android:textSize="14sp" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Traducción"
-                    android:textSize="11sp"
-                    android:textColor="#888888"
-                    android:textAllCaps="true"
-                    android:letterSpacing="0.1"
-                    android:layout_marginTop="12dp"
-                    android:layout_marginBottom="4dp" />
-
-                <TextView
-                    android:id="@+id/txtTraducido"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:minHeight="60dp"
-                    android:background="#1A1976D2"
-                    android:padding="12dp"
-                    android:text=""
-                    android:textColor="#1565C0"
-                    android:textSize="14sp" />
-
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Texto detectado" android:textSize="11sp" android:textColor="#888888" android:textAllCaps="true" android:layout_marginBottom="4dp" />
+                <TextView android:id="@+id/txtOriginal" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="40dp" android:background="#08000000" android:padding="8dp" android:textSize="12sp" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Traducción" android:textSize="11sp" android:textColor="#888888" android:textAllCaps="true" android:layout_marginTop="12dp" android:layout_marginBottom="4dp" />
+                <TextView android:id="@+id/txtTraducido" android:layout_width="match_parent" android:layout_height="wrap_content" android:minHeight="40dp" android:background="#081976D2" android:padding="8dp" android:textColor="#1565C0" android:textSize="12sp" />
             </LinearLayout>
         </ScrollView>
     </com.google.android.material.card.MaterialCardView>
