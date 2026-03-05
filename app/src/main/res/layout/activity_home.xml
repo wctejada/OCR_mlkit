@@ -30,7 +30,7 @@
         android:layout_marginBottom="-60dp"
         android:layout_marginStart="-60dp" />
 
-    <!-- Ícono de la app -->
+    <!-- Ícono -->
     <ImageView
         android:id="@+id/appIcon"
         android:layout_width="72dp"
@@ -40,9 +40,9 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="80dp" />
+        android:layout_marginTop="72dp" />
 
-    <!-- Nombre de la app -->
+    <!-- Nombre -->
     <TextView
         android:id="@+id/txtAppName"
         android:layout_width="wrap_content"
@@ -71,7 +71,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="6dp" />
 
-    <!-- Línea separadora -->
+    <!-- Línea decorativa -->
     <View
         android:id="@+id/divider"
         android:layout_width="40dp"
@@ -82,119 +82,192 @@
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="20dp" />
 
-    <!-- ── BOTÓN LIVE PREVIEW ── -->
-    <androidx.cardview.widget.CardView
-        android:id="@+id/btnIrLive"
+    <!-- ══════════════════════════════════════════
+         BLOQUE DE ESTADO DEL MODELO
+         Visible mientras descarga / invisible cuando listo
+         ══════════════════════════════════════════ -->
+    <LinearLayout
+        android:id="@+id/layoutDescarga"
         android:layout_width="0dp"
-        android:layout_height="160dp"
-        android:layout_marginStart="24dp"
-        android:layout_marginEnd="12dp"
-        android:layout_marginTop="48dp"
-        android:foreground="?attr/selectableItemBackground"
-        android:clickable="true"
-        android:focusable="true"
-        app:cardBackgroundColor="#1A1A2E"
-        app:cardCornerRadius="20dp"
-        app:cardElevation="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginStart="32dp"
+        android:layout_marginEnd="32dp"
+        android:layout_marginTop="40dp"
+        android:gravity="center"
+        android:visibility="gone"
         app:layout_constraintTop_toBottomOf="@id/divider"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toStartOf="@id/btnIrGaleria">
-
-        <androidx.constraintlayout.widget.ConstraintLayout
-            android:layout_width="match_parent"
-            android:layout_height="match_parent">
-
-            <!-- Franja de color superior -->
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="4dp"
-                android:background="#1976D2"
-                app:layout_constraintTop_toTopOf="parent" />
-
-            <ImageView
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:src="@android:drawable/ic_menu_camera"
-                app:tint="#64B5F6"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintBottom_toTopOf="@+id/txtLiveLabel"
-                android:layout_marginTop="28dp" />
-
-            <TextView
-                android:id="@+id/txtLiveLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Cámara\nen vivo"
-                android:textColor="#FFFFFF"
-                android:textSize="15sp"
-                android:textStyle="bold"
-                android:gravity="center"
-                android:layout_marginBottom="20dp"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent" />
-
-        </androidx.constraintlayout.widget.ConstraintLayout>
-    </androidx.cardview.widget.CardView>
-
-    <!-- ── BOTÓN GALERÍA ── -->
-    <androidx.cardview.widget.CardView
-        android:id="@+id/btnIrGaleria"
-        android:layout_width="0dp"
-        android:layout_height="160dp"
-        android:layout_marginStart="12dp"
-        android:layout_marginEnd="24dp"
-        android:layout_marginTop="48dp"
-        android:foreground="?attr/selectableItemBackground"
-        android:clickable="true"
-        android:focusable="true"
-        app:cardBackgroundColor="#1A1A2E"
-        app:cardCornerRadius="20dp"
-        app:cardElevation="0dp"
-        app:layout_constraintTop_toBottomOf="@id/divider"
-        app:layout_constraintStart_toEndOf="@id/btnIrLive"
         app:layout_constraintEnd_toEndOf="parent">
 
-        <androidx.constraintlayout.widget.ConstraintLayout
+        <!-- Ícono de estado (nube descargando / check) -->
+        <ImageView
+            android:id="@+id/iconEstado"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:src="@android:drawable/stat_sys_download"
+            app:tint="#64B5F6"
+            android:layout_marginBottom="12dp" />
+
+        <!-- Texto de estado -->
+        <TextView
+            android:id="@+id/txtEstadoModelo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Preparando modelo de traducción..."
+            android:textColor="#CCCCCC"
+            android:textSize="14sp"
+            android:gravity="center"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Barra de progreso indeterminada mientras descarga -->
+        <ProgressBar
+            android:id="@+id/progressDescarga"
+            style="@style/Widget.AppCompat.ProgressBar.Horizontal"
             android:layout_width="match_parent"
-            android:layout_height="match_parent">
+            android:layout_height="6dp"
+            android:indeterminate="true"
+            android:progressTint="#1976D2"
+            android:progressBackgroundTint="#333333"
+            android:layout_marginBottom="8dp" />
 
-            <!-- Franja de color superior -->
-            <View
+        <!-- Texto pequeño de ayuda -->
+        <TextView
+            android:id="@+id/txtAyudaDescarga"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Esto solo ocurre la primera vez"
+            android:textColor="#555555"
+            android:textSize="12sp"
+            android:gravity="center" />
+
+    </LinearLayout>
+
+    <!-- ══════════════════════════════════════════
+         BOTONES PRINCIPALES
+         Deshabilitados mientras descarga
+         ══════════════════════════════════════════ -->
+    <LinearLayout
+        android:id="@+id/layoutBotones"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="24dp"
+        android:layout_marginTop="40dp"
+        app:layout_constraintTop_toBottomOf="@id/layoutDescarga"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- Botón Cámara en vivo -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/btnIrLive"
+            android:layout_width="0dp"
+            android:layout_height="160dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="10dp"
+            android:foreground="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            app:cardBackgroundColor="#1A1A2E"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="0dp">
+
+            <androidx.constraintlayout.widget.ConstraintLayout
                 android:layout_width="match_parent"
-                android:layout_height="4dp"
-                android:background="#7B1FA2"
-                app:layout_constraintTop_toTopOf="parent" />
+                android:layout_height="match_parent">
 
-            <ImageView
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:src="@android:drawable/ic_menu_gallery"
-                app:tint="#CE93D8"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                app:layout_constraintBottom_toTopOf="@+id/txtGaleriaLabel"
-                android:layout_marginTop="28dp" />
+                <View
+                    android:id="@+id/stripeLive"
+                    android:layout_width="match_parent"
+                    android:layout_height="4dp"
+                    android:background="#1976D2"
+                    app:layout_constraintTop_toTopOf="parent" />
 
-            <TextView
-                android:id="@+id/txtGaleriaLabel"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Desde\ngalería"
-                android:textColor="#FFFFFF"
-                android:textSize="15sp"
-                android:textStyle="bold"
-                android:gravity="center"
-                android:layout_marginBottom="20dp"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintEnd_toEndOf="parent" />
+                <ImageView
+                    android:id="@+id/iconLive"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:src="@android:drawable/ic_menu_camera"
+                    app:tint="#64B5F6"
+                    app:layout_constraintTop_toBottomOf="@id/stripeLive"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintBottom_toTopOf="@+id/txtLiveLabel"
+                    android:layout_marginTop="8dp" />
 
-        </androidx.constraintlayout.widget.ConstraintLayout>
-    </androidx.cardview.widget.CardView>
+                <TextView
+                    android:id="@+id/txtLiveLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Cámara\nen vivo"
+                    android:textColor="#FFFFFF"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:gravity="center"
+                    android:layout_marginBottom="18dp"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent" />
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- Botón Galería -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/btnIrGaleria"
+            android:layout_width="0dp"
+            android:layout_height="160dp"
+            android:layout_weight="1"
+            android:layout_marginStart="10dp"
+            android:foreground="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            app:cardBackgroundColor="#1A1A2E"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="0dp">
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent">
+
+                <View
+                    android:id="@+id/stripeGaleria"
+                    android:layout_width="match_parent"
+                    android:layout_height="4dp"
+                    android:background="#7B1FA2"
+                    app:layout_constraintTop_toTopOf="parent" />
+
+                <ImageView
+                    android:id="@+id/iconGaleria"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:src="@android:drawable/ic_menu_gallery"
+                    app:tint="#CE93D8"
+                    app:layout_constraintTop_toBottomOf="@id/stripeGaleria"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintBottom_toTopOf="@+id/txtGaleriaLabel"
+                    android:layout_marginTop="8dp" />
+
+                <TextView
+                    android:id="@+id/txtGaleriaLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Desde\ngalería"
+                    android:textColor="#FFFFFF"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:gravity="center"
+                    android:layout_marginBottom="18dp"
+                    app:layout_constraintBottom_toBottomOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toEndOf="parent" />
+
+            </androidx.constraintlayout.widget.ConstraintLayout>
+        </androidx.cardview.widget.CardView>
+
+    </LinearLayout>
 
     <!-- Texto inferior -->
     <TextView
