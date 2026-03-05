@@ -6,22 +6,23 @@ import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.Environment;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.core.*;
+import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-import androidx.core.content.FileProvider;
 
 import com.example.ocr_mlkit.databinding.ActivityMainBinding;
-import com.google.android.material.snackbar.Snackbar;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.mlkit.common.model.DownloadConditions;
 import com.google.mlkit.nl.translate.TranslateLanguage;
 import com.google.mlkit.nl.translate.Translation;
@@ -33,404 +34,404 @@ import com.google.mlkit.vision.text.TextRecognition;
 import com.google.mlkit.vision.text.TextRecognizer;
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
 
-import androidx.camera.core.*;
-import androidx.camera.lifecycle.ProcessCameraProvider;
-
-import com.google.common.util.concurrent.ListenableFuture;
-
-import java.util.concurrent.Executors;
-import java.util.concurrent.ExecutionException;
-import java.io.File;
 import java.io.IOException;
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-
-import androidx.camera.core.ImageProxy;
-
-import android.media.Image;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
 
     private ActivityMainBinding binding;
     private PreviewView previewView;
 
-
-    private String directorioImagen;
-    private Bitmap imagenSeleccionada;
-
-
     private TextRecognizer recognizer;
-
     private Translator translator;
+
     private boolean modeloListo = false;
     private String ultimoTextoDetectado = "";
 
+    // CameraX: tres use cases corriendo al mismo tiempo
     private ProcessCameraProvider cameraProvider;
-
     private ExecutorService cameraExecutor;
+    private ImageCapture imageCapture;
+    private ImageAnalysis imageAnalysis;
 
+    // Estado de la pantalla
+    private enum Modo { LIVE, CONGELADO, GALERIA }
+    private Modo modoActual = Modo.LIVE;
 
-    private static final int REQUEST_IMAGE_CAPTURE = 100;
     private static final int REQUEST_PICK_IMAGE = 101;
     private static final int REQUEST_PERMISSIONS = 102;
+
+    // ─────────────────────────────────────────────────────────────────────────
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         binding = ActivityMainBinding.inflate(getLayoutInflater());
         setContentView(binding.getRoot());
         setSupportActionBar(binding.toolbar);
-        // Inicializar OCR
+
         recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
-        // Traduccion
-        TranslatorOptions options =
-                new TranslatorOptions.Builder()
-                        .setSourceLanguage(TranslateLanguage.SPANISH)
-                        .setTargetLanguage(TranslateLanguage.ENGLISH)
-                        .build();
-        translator = Translation.getClient(options);
+        inicializarTraductor();
 
-        // Descargar modelo
-        DownloadConditions conditions = new DownloadConditions.Builder().build();
-
-        translator.downloadModelIfNeeded(conditions)
-                .addOnSuccessListener(unused -> modeloListo = true)
-                .addOnFailureListener(e -> Log.e("TRAD", "Error modelo", e));
-
-
-
-        // Inicializar Live Preview
         previewView = binding.contentMain.previewView;
         cameraExecutor = Executors.newSingleThreadExecutor();
 
-
-        // Botón camara live preview
-        binding.fabCam.setOnClickListener(view -> {
-            if (checkAndRequestPermissions()) {
-                iniciarLivePreview();
-            } else {
-                Snackbar.make(binding.getRoot(),
-                        "Favor otorgar permisos",
-                        Snackbar.LENGTH_LONG).show();
-            }
-        });
-        //Tomar foto
-        binding.contentMain.btnEjecutarCamara.setOnClickListener(view -> {
-            if (checkAndRequestPermissions()) {
-                abrirCamara();
-            } else {
-                Snackbar.make(binding.getRoot(),
-                        "Favor otorgar permisos",
-                        Snackbar.LENGTH_LONG).show();
-            }
-        });
-
-        // Botón galería
-        binding.contentMain.btnSeleccionarGaleria.setOnClickListener(v -> abrirGaleria());
-
-        // Texto inicial
-        binding.contentMain.txtOriginal.setText(
-                "Selecciona una foto o usa Live Preview con el botón flotante."
-        );
-        binding.contentMain.txtTraducido.setText("");
+        configurarBotones();
+        solicitarPermisoYArrancar();
     }
 
+    // ── Permisos ──────────────────────────────────────────────────────────────
 
-    // MÉTODOS DE SELECCIÓN DE IMAGEN
-
-    private void abrirGaleria() {
-        detenerLivePreview();
-        if (checkAndRequestPermissions()) {
-            Intent galeriaIntent = new Intent(Intent.ACTION_GET_CONTENT);
-            galeriaIntent.setType("image/*");
-
-            Intent selectorIntent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-            selectorIntent.setType("image/*");
-
-            Intent menuSelection = Intent.createChooser(galeriaIntent, "Seleccione una Imagen");
-            menuSelection.putExtra(Intent.EXTRA_INITIAL_INTENTS, new Intent[]{selectorIntent});
-
-            startActivityForResult(menuSelection, REQUEST_PICK_IMAGE);
-        }
-    }
-
-    private void abrirCamara() {
-        detenerLivePreview();
-        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
-            File archivoImagen = null;
-            try {
-                archivoImagen = createImageFile();
-            } catch (Exception error) {
-                error.printStackTrace();
-                Log.d("IMAGEN_CAMARA", "Error al generar archivo de imagen");
-            }
-
-            if (archivoImagen != null) {
-                Uri fotoUri = FileProvider.getUriForFile(this,
-                        "com.example.ocr_mlkit.fileprovider", archivoImagen);
-                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, fotoUri);
-            }
-
-            startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
+    private void solicitarPermisoYArrancar() {
+        if (tienePermisosCamara()) {
+            iniciarCamara();
         } else {
-            Snackbar.make(binding.getRoot(), "No se encontró app para manejo de cámara", Snackbar.LENGTH_LONG).show();
+            ActivityCompat.requestPermissions(this,
+                    new String[]{
+                            Manifest.permission.CAMERA,
+                            Manifest.permission.READ_EXTERNAL_STORAGE
+                    }, REQUEST_PERMISSIONS);
         }
     }
 
-    // LIVE PREVIEW
-    private void iniciarLivePreview() {
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           String[] permissions, int[] results) {
+        super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (requestCode == REQUEST_PERMISSIONS
+                && results.length > 0
+                && results[0] == PackageManager.PERMISSION_GRANTED) {
+            iniciarCamara();
+        } else {
+            Toast.makeText(this,
+                    "Se necesita permiso de cámara para usar la app.",
+                    Toast.LENGTH_LONG).show();
+        }
+    }
 
-        binding.contentMain.previewView.setVisibility(View.VISIBLE);
-        binding.contentMain.imgBarcode.setVisibility(View.GONE);
+    private boolean tienePermisosCamara() {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                == PackageManager.PERMISSION_GRANTED;
+    }
 
-        ListenableFuture<ProcessCameraProvider> cameraProviderFuture =
+    // ── Botones ───────────────────────────────────────────────────────────────
+
+    private void configurarBotones() {
+        // Captura alta resolución
+        binding.contentMain.btnCapturar.setOnClickListener(v -> capturarFoto());
+
+        // Volver al live
+        binding.contentMain.btnReanudar.setOnClickListener(v -> reanudarLive());
+
+        // Galería
+        binding.contentMain.btnGaleria.setOnClickListener(v -> abrirGaleria());
+
+        actualizarUI();
+    }
+
+    // ── CameraX ───────────────────────────────────────────────────────────────
+
+    private void iniciarCamara() {
+        ListenableFuture<ProcessCameraProvider> future =
                 ProcessCameraProvider.getInstance(this);
 
-        cameraProviderFuture.addListener(() -> {
+        future.addListener(() -> {
             try {
-
-                cameraProvider = cameraProviderFuture.get();
-
-                Preview preview = new Preview.Builder().build();
-                preview.setSurfaceProvider(previewView.getSurfaceProvider());
-
-                ImageAnalysis imageAnalysis =
-                        new ImageAnalysis.Builder()
-                                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                                .build();
-
-                imageAnalysis.setAnalyzer(cameraExecutor, imageProxy -> {
-                    procesarFrame(imageProxy);
-                });
-
-                CameraSelector cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA;
-
-                cameraProvider.unbindAll();
-                cameraProvider.bindToLifecycle(
-                        this,
-                        cameraSelector,
-                        preview,
-                        imageAnalysis
-                );
-
+                cameraProvider = future.get();
+                bindCameraUseCases();
             } catch (ExecutionException | InterruptedException e) {
-                e.printStackTrace();
+                Log.e("CAM", "Error iniciando cámara", e);
             }
-
         }, ContextCompat.getMainExecutor(this));
     }
-    private void detenerLivePreview() {
-        if (cameraProvider != null) {
-            cameraProvider.unbindAll();
+
+    /**
+     * Vincula los tres use cases al mismo tiempo:
+     *  - Preview   → muestra el viewfinder en tiempo real
+     *  - ImageAnalysis → live OCR frame a frame
+     *  - ImageCapture  → foto de alta calidad al presionar el botón
+     */
+    private void bindCameraUseCases() {
+        if (cameraProvider == null) return;
+
+        Preview preview = new Preview.Builder().build();
+        preview.setSurfaceProvider(previewView.getSurfaceProvider());
+
+        imageAnalysis = new ImageAnalysis.Builder()
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build();
+        imageAnalysis.setAnalyzer(cameraExecutor, this::procesarFrame);
+
+        imageCapture = new ImageCapture.Builder()
+                .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
+                .build();
+
+        cameraProvider.unbindAll();
+        cameraProvider.bindToLifecycle(
+                this,
+                CameraSelector.DEFAULT_BACK_CAMERA,
+                preview,
+                imageAnalysis,
+                imageCapture
+        );
+
+        modoActual = Modo.LIVE;
+        actualizarUI();
+    }
+
+    /** Pausa el OCR en vivo sin detener el preview ni la cámara. */
+    private void pausarAnalisis() {
+        if (imageAnalysis != null) {
+            imageAnalysis.clearAnalyzer();
         }
     }
-    private void procesarFrame(ImageProxy imageProxy) {
 
-        @androidx.annotation.Nullable
-        android.media.Image mediaImage = imageProxy.getImage();
+    /** Reactiva el OCR en vivo. */
+    private void reanudarLive() {
+        binding.contentMain.imgCapturada.setVisibility(View.GONE);
+        binding.contentMain.previewView.setVisibility(View.VISIBLE);
 
-        if (mediaImage != null) {
+        if (imageAnalysis != null) {
+            imageAnalysis.setAnalyzer(cameraExecutor, this::procesarFrame);
+        }
 
-            InputImage image = InputImage.fromMediaImage(
-                    mediaImage,
-                    imageProxy.getImageInfo().getRotationDegrees()
-            );
+        ultimoTextoDetectado = "";
+        binding.contentMain.txtOriginal.setText("Apunta la cámara al texto...");
+        binding.contentMain.txtTraducido.setText("");
 
-            recognizer.process(image)
-                    .addOnSuccessListener(text -> {
+        modoActual = Modo.LIVE;
+        actualizarUI();
+    }
 
-                        String detectedText = text.getText();
+    // ── Captura de foto (alta resolución) ─────────────────────────────────────
+
+    private void capturarFoto() {
+        if (imageCapture == null) return;
+
+        pausarAnalisis();
+        modoActual = Modo.CONGELADO;
+        actualizarUI();
+
+        binding.contentMain.txtOriginal.setText("Procesando captura...");
+        binding.contentMain.txtTraducido.setText("");
+
+        imageCapture.takePicture(cameraExecutor,
+                new ImageCapture.OnImageCapturedCallback() {
+                    @Override
+                    public void onCaptureSuccess(ImageProxy imageProxy) {
+                        Bitmap bitmap = imageProxyToBitmap(imageProxy);
+                        imageProxy.close();
+
+                        if (bitmap == null) {
+                            runOnUiThread(() ->
+                                    binding.contentMain.txtOriginal.setText("Error al capturar imagen")
+                            );
+                            return;
+                        }
 
                         runOnUiThread(() -> {
-                            binding.contentMain.txtOriginal.setText(
-                                    detectedText.isEmpty() ? "Escaneando..." : detectedText
-                            );
+                            // Mostrar la imagen congelada encima del previewView
+                            binding.contentMain.imgCapturada.setImageBitmap(bitmap);
+                            binding.contentMain.imgCapturada.setVisibility(View.VISIBLE);
                         });
-                        // traducir si hay texto y modelo listo
-                        if (!detectedText.isEmpty()
-                                && modeloListo
-                                && !detectedText.equals(ultimoTextoDetectado)) {
 
-                            ultimoTextoDetectado = detectedText;
-                            traducirEnVivo(detectedText);
-                        }
+                        procesarOCRBitmap(bitmap);
+                    }
 
-                    })
-                    .addOnFailureListener(e -> Log.e("LIVE_OCR", "Error", e))
-                    .addOnCompleteListener(task -> {
-                        if (imageProxy != null) {
-                            imageProxy.close();
-                        }
-                    });
+                    @Override
+                    public void onError(ImageCaptureException exception) {
+                        Log.e("CAPTURE", "Error capturando", exception);
+                        runOnUiThread(() -> {
+                            Toast.makeText(MainActivity.this,
+                                    "Error al capturar", Toast.LENGTH_SHORT).show();
+                            reanudarLive();
+                        });
+                    }
+                });
+    }
 
-        } else {
-            imageProxy.close();
+    private Bitmap imageProxyToBitmap(ImageProxy imageProxy) {
+        try {
+            android.media.Image mediaImage = imageProxy.getImage();
+            if (mediaImage == null) return null;
+            InputImage inputImage = InputImage.fromMediaImage(
+                    mediaImage, imageProxy.getImageInfo().getRotationDegrees());
+            return inputImage.getBitmapInternal();
+        } catch (Exception e) {
+            Log.e("BITMAP", "Error convirtiendo imagen", e);
+            return null;
         }
     }
-//Traducir en vivo
-private void traducirEnVivo(String texto) {
 
-    translator.translate(texto)
-            .addOnSuccessListener(traduccion -> {
-                runOnUiThread(() -> {
-                    binding.contentMain.txtTraducido.setText(traduccion);
+    // ── Live OCR (frame a frame) ──────────────────────────────────────────────
+
+    private void procesarFrame(ImageProxy imageProxy) {
+        android.media.Image mediaImage = imageProxy.getImage();
+        if (mediaImage == null) {
+            imageProxy.close();
+            return;
+        }
+
+        InputImage image = InputImage.fromMediaImage(
+                mediaImage, imageProxy.getImageInfo().getRotationDegrees());
+
+        recognizer.process(image)
+                .addOnSuccessListener(text -> {
+                    String detectedText = text.getText();
+                    runOnUiThread(() ->
+                            binding.contentMain.txtOriginal.setText(
+                                    detectedText.isEmpty()
+                                            ? "Apunta la cámara al texto..."
+                                            : detectedText)
+                    );
+                    if (!detectedText.isEmpty()
+                            && modeloListo
+                            && !detectedText.equals(ultimoTextoDetectado)) {
+                        ultimoTextoDetectado = detectedText;
+                        traducir(detectedText, false);
+                    }
+                })
+                .addOnFailureListener(e -> Log.e("LIVE_OCR", "Error", e))
+                .addOnCompleteListener(task -> imageProxy.close());
+    }
+
+    // ── OCR sobre Bitmap (captura / galería) ──────────────────────────────────
+
+    private void procesarOCRBitmap(Bitmap bitmap) {
+        InputImage image = InputImage.fromBitmap(bitmap, 0);
+
+        recognizer.process(image)
+                .addOnSuccessListener(visionText -> {
+                    StringBuilder sb = new StringBuilder();
+                    for (Text.TextBlock block : visionText.getTextBlocks())
+                        for (Text.Line line : block.getLines())
+                            sb.append(line.getText()).append("\n");
+
+                    String texto = sb.toString().trim();
+
+                    runOnUiThread(() -> {
+                        if (texto.isEmpty()) {
+                            binding.contentMain.txtOriginal.setText("No se detectó texto.");
+                            binding.contentMain.txtTraducido.setText("");
+                        } else {
+                            binding.contentMain.txtOriginal.setText(texto);
+                            if (modeloListo) {
+                                traducir(texto, true);
+                            } else {
+                                binding.contentMain.txtTraducido.setText(
+                                        "Modelo descargando, intente de nuevo en un momento.");
+                            }
+                        }
+                    });
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("OCR_BITMAP", "Error", e);
+                    runOnUiThread(() ->
+                            binding.contentMain.txtOriginal.setText("Error al reconocer texto."));
                 });
-            })
-            .addOnFailureListener(e -> {
-                Log.e("TRAD", "Error traducción", e);
-            });
-}
-    // RESULTADO DE IMAGEN
+    }
+
+    // ── Traducción ────────────────────────────────────────────────────────────
+
+    private void traducir(String texto, boolean mostrarCargando) {
+        if (mostrarCargando) {
+            runOnUiThread(() ->
+                    binding.contentMain.txtTraducido.setText("Traduciendo..."));
+        }
+        translator.translate(texto)
+                .addOnSuccessListener(traduccion ->
+                        runOnUiThread(() ->
+                                binding.contentMain.txtTraducido.setText(traduccion))
+                )
+                .addOnFailureListener(e -> Log.e("TRAD", "Error", e));
+    }
+
+    private void inicializarTraductor() {
+        TranslatorOptions options = new TranslatorOptions.Builder()
+                .setSourceLanguage(TranslateLanguage.ENGLISH)
+                .setTargetLanguage(TranslateLanguage.SPANISH)
+                .build();
+        translator = Translation.getClient(options);
+
+        translator.downloadModelIfNeeded(new DownloadConditions.Builder().build())
+                .addOnSuccessListener(unused -> {
+                    modeloListo = true;
+                    Log.d("TRAD", "Modelo listo");
+                    if (!ultimoTextoDetectado.isEmpty())
+                        traducir(ultimoTextoDetectado, false);
+                })
+                .addOnFailureListener(e -> {
+                    Log.e("TRAD", "Error descargando modelo", e);
+                    runOnUiThread(() ->
+                            binding.contentMain.txtTraducido.setText(
+                                    "Error al descargar modelo de traducción."));
+                });
+    }
+
+    // ── Galería ───────────────────────────────────────────────────────────────
+
+    private void abrirGaleria() {
+        pausarAnalisis();
+        modoActual = Modo.GALERIA;
+        actualizarUI();
+
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+        intent.setType("image/*");
+        startActivityForResult(
+                Intent.createChooser(intent, "Seleccionar imagen"),
+                REQUEST_PICK_IMAGE);
+    }
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
 
-        if (resultCode != RESULT_OK) return;
-
-        try {
-            if (requestCode == REQUEST_IMAGE_CAPTURE) {
-                File imgFile = new File(directorioImagen);
-                if (imgFile.exists()) {
-
-                    InputImage image = InputImage.fromFilePath(this, Uri.fromFile(imgFile));
-                    imagenSeleccionada = image.getBitmapInternal();
-
-                    binding.contentMain.previewView.setVisibility(View.GONE); // ocultar live
-                    binding.contentMain.imgBarcode.setImageBitmap(imagenSeleccionada);
-                    binding.contentMain.imgBarcode.setVisibility(View.VISIBLE);
-
-                    binding.contentMain.txtOriginal.setText("Reconociendo texto...");
-                    binding.contentMain.txtTraducido.setText("");
-
-
-                    procesarOCR(imagenSeleccionada);
-                }
-            }
-
-            if (requestCode == REQUEST_PICK_IMAGE && data != null && data.getData() != null) {
-                Uri imagenUri = data.getData();
-                InputImage image = InputImage.fromFilePath(this, imagenUri);
-                imagenSeleccionada = image.getBitmapInternal();
-
-                binding.contentMain.imgBarcode.setImageBitmap(imagenSeleccionada);
-                binding.contentMain.imgBarcode.setVisibility(View.VISIBLE);
-                binding.contentMain.previewView.setVisibility(View.GONE);
-                binding.contentMain.txtOriginal.setText("Reconociendo texto...");
-                binding.contentMain.txtTraducido.setText("");
-                procesarOCR(imagenSeleccionada);
-            }
-
-        } catch (IOException e) {
-            e.printStackTrace();
-            Snackbar.make(binding.getRoot(), "Error al procesar la imagen", Snackbar.LENGTH_LONG).show();
-        }
-    }
-
-
-    // OCR
-
-    private void procesarOCR(Bitmap bitmap) {
-
-        if (bitmap == null) {
-            binding.contentMain.txtOriginal.setText("No hay imagen para OCR");
-            binding.contentMain.txtTraducido.setText("");
+        if (resultCode != RESULT_OK || requestCode != REQUEST_PICK_IMAGE
+                || data == null || data.getData() == null) {
+            reanudarLive();
             return;
         }
 
         try {
+            Uri imagenUri = data.getData();
+            InputImage input = InputImage.fromFilePath(this, imagenUri);
+            Bitmap bitmap = input.getBitmapInternal();
 
-            InputImage image = InputImage.fromBitmap(bitmap, 0);
-
-            recognizer.process(image)
-                    .addOnSuccessListener(visionText -> {
-
-                        StringBuilder resultado = new StringBuilder();
-
-                        for (Text.TextBlock block : visionText.getTextBlocks()) {
-                            for (Text.Line line : block.getLines()) {
-                                resultado.append(line.getText()).append("\n");
-                            }
-                        }
-
-                        String textoDetectado = resultado.toString().trim();
-
-                        if (textoDetectado.isEmpty()) {
-
-                            binding.contentMain.txtOriginal.setText("No se detectó texto");
-                            binding.contentMain.txtTraducido.setText("");
-
-                        } else {
-
-                            // Mostrar texto original
-                            binding.contentMain.txtOriginal.setText(textoDetectado);
-
-                            // Traducir si modelo listo
-                            if (modeloListo) {
-                                traducirFoto(textoDetectado);
-                            } else {
-                                binding.contentMain.txtTraducido.setText("Modelo no disponible");
-                            }
-                        }
-
-                    })
-                    .addOnFailureListener(e -> {
-                        e.printStackTrace();
-                        binding.contentMain.txtOriginal.setText("Error en OCR");
-                        binding.contentMain.txtTraducido.setText("");
-                    });
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            binding.contentMain.txtOriginal.setText("Error procesando imagen");
-            binding.contentMain.txtTraducido.setText("");
+            if (bitmap != null) {
+                binding.contentMain.imgCapturada.setImageBitmap(bitmap);
+                binding.contentMain.imgCapturada.setVisibility(View.VISIBLE);
+                binding.contentMain.previewView.setVisibility(View.GONE);
+                binding.contentMain.txtOriginal.setText("Reconociendo texto...");
+                binding.contentMain.txtTraducido.setText("");
+                procesarOCRBitmap(bitmap);
+            }
+        } catch (IOException e) {
+            Log.e("GALLERY", "Error cargando imagen", e);
+            Toast.makeText(this, "Error al cargar imagen", Toast.LENGTH_SHORT).show();
+            reanudarLive();
         }
     }
 
-    private void traducirFoto(String texto) {
+    // ── UI dinámica según modo ────────────────────────────────────────────────
 
-        binding.contentMain.txtTraducido.setText("Traduciendo...");
-
-        translator.translate(texto)
-                .addOnSuccessListener(traduccion -> {
-                    binding.contentMain.txtTraducido.setText(traduccion);
-                })
-                .addOnFailureListener(e -> {
-                    Log.e("TRAD_FOTO", "Error traducción", e);
-                    binding.contentMain.txtTraducido.setText("Error en traducción");
-                });
-    }
-    // PERMISOS
-
-    private boolean checkAndRequestPermissions() {
-        int cameraPermission = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA);
-        if (cameraPermission != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this,
-                    new String[]{
-                            Manifest.permission.CAMERA,
-                            Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                            Manifest.permission.READ_EXTERNAL_STORAGE
-                    }, REQUEST_PERMISSIONS);
-            return false;
-        }
-        return true;
+    private void actualizarUI() {
+        runOnUiThread(() -> {
+            boolean enLive = modoActual == Modo.LIVE;
+            // "Capturar" solo en live
+            binding.contentMain.btnCapturar.setVisibility(
+                    enLive ? View.VISIBLE : View.GONE);
+            // "Reanudar" cuando está congelado o galería
+            binding.contentMain.btnReanudar.setVisibility(
+                    enLive ? View.GONE : View.VISIBLE);
+            // Previewview siempre visible salvo galería
+            if (modoActual != Modo.GALERIA)
+                binding.contentMain.previewView.setVisibility(View.VISIBLE);
+        });
     }
 
-    // CREAR ARCHIVO TEMPORAL DE IMAGEN
-    private File createImageFile() throws IOException {
-        String fechaHoy = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-        String nombreArchivo = "JPEG_" + fechaHoy + "_";
-        File directorio = getExternalFilesDir(Environment.DIRECTORY_PICTURES);
-        File imagen = File.createTempFile(nombreArchivo, ".jpg", directorio);
-        directorioImagen = imagen.getAbsolutePath();
-        return imagen;
-    }
-
-
-    // MENÚ
+    // ── Ciclo de vida ─────────────────────────────────────────────────────────
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -439,18 +440,19 @@ private void traducirEnVivo(String texto) {
     }
 
     @Override
-    protected void onDestroy() {
-        super.onDestroy();
-
-        if (recognizer != null) recognizer.close();
-        if (cameraExecutor != null) cameraExecutor.shutdown();
-        if (translator != null) translator.close();
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == R.id.action_settings) {
+            startActivity(new Intent(this, SettingsActivity.class));
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 
     @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        int id = item.getItemId();
-        if (id == R.id.action_settings) return true;
-        return super.onOptionsItemSelected(item);
+    protected void onDestroy() {
+        super.onDestroy();
+        if (recognizer != null) recognizer.close();
+        if (cameraExecutor != null) cameraExecutor.shutdown();
+        if (translator != null) translator.close();
     }
 }

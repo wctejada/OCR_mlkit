@@ -19,6 +19,14 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.OCR_mlkit">
         <activity
+            android:name=".SettingsActivity"
+            android:parentActivityName=".MainActivity"
+            android:exported="false">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".MainActivity" />
+        </activity>
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:theme="@style/Theme.OCR_mlkit">
