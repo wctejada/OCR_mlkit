@@ -59,7 +59,6 @@ public class MainActivity extends AppCompatActivity {
     public static final String MODO_GALERIA = "GALERIA";
 
     private ActivityMainBinding binding;
-
     private TextRecognizer recognizer;
     private Translator translator;
 
@@ -72,6 +71,7 @@ public class MainActivity extends AppCompatActivity {
     private String sourceLang = TranslateLanguage.ENGLISH;
     private String targetLang = TranslateLanguage.SPANISH;
     private boolean bloqueadoPorTraduccion = false;
+    private boolean esCapturaManual = false;
 
     private ProcessCameraProvider cameraProvider;
     private ExecutorService cameraExecutor;
@@ -79,14 +79,14 @@ public class MainActivity extends AppCompatActivity {
     private ImageAnalysis imageAnalysis;
 
     private List<DetectedLine> lineasDetectadas = new ArrayList<>();
-    private int ultimoScannerWidthPx = 0;
-    private int ultimoScannerHeightPx = 0;
+    private int ultimoScannerWidthPx = 1;
+    private int ultimoScannerHeightPx = 1;
 
     private static class DetectedLine {
         String originalText;
         String translatedText;
-        Rect boundingBox; // Relativo al scanner rect
-        float rawHeight;  // Altura original en pixels
+        Rect boundingBox;
+        float rawHeight;
         
         DetectedLine(String text, Rect rect, float height) {
             this.originalText = text;
@@ -108,9 +108,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(binding.getRoot());
         setSupportActionBar(binding.toolbar);
 
-        if (getSupportActionBar() != null) {
-            getSupportActionBar().setDisplayHomeAsUpEnabled(true);
-        }
+        if (getSupportActionBar() != null) getSupportActionBar().setDisplayHomeAsUpEnabled(true);
 
         modoInicio = getIntent().getStringExtra(EXTRA_MODO);
         if (modoInicio == null) modoInicio = MODO_LIVE;
@@ -120,68 +118,58 @@ public class MainActivity extends AppCompatActivity {
         verificarYPrepararModelo();
 
         cameraExecutor = Executors.newSingleThreadExecutor();
-
         configurarBotones();
         solicitarPermisoYArrancar();
     }
 
     private void crearTranslator() {
-        if (translator != null) {
-            translator.close();
-        }
-        TranslatorOptions options = new TranslatorOptions.Builder()
-                .setSourceLanguage(sourceLang)
-                .setTargetLanguage(targetLang)
-                .build();
-        translator = Translation.getClient(options);
+        if (translator != null) translator.close();
+        translator = Translation.getClient(new TranslatorOptions.Builder()
+                .setSourceLanguage(sourceLang).setTargetLanguage(targetLang).build());
         modeloListo = false;
     }
 
     private void verificarYPrepararModelo() {
-        DownloadConditions conditions = new DownloadConditions.Builder()
-                .requireWifi()
-                .build();
-        translator.downloadModelIfNeeded(conditions)
+        translator.downloadModelIfNeeded(new DownloadConditions.Builder().requireWifi().build())
                 .addOnSuccessListener(unused -> {
                     modeloListo = true;
-                    Log.d("ML_KIT", "Modelo de traducción listo.");
                     runOnUiThread(() -> Toast.makeText(this, "Traductor listo", Toast.LENGTH_SHORT).show());
-                })
-                .addOnFailureListener(e -> {
-                    modeloListo = false;
-                    Log.e("ML_KIT", "Error descargando modelo", e);
-                    runOnUiThread(() -> Toast.makeText(this, "Error al descargar el modelo de traducción", Toast.LENGTH_SHORT).show());
                 });
     }
 
     private void cambiarIdioma() {
         if (sourceLang.equals(TranslateLanguage.ENGLISH)) {
-            sourceLang = TranslateLanguage.SPANISH;
-            targetLang = TranslateLanguage.ENGLISH;
-            binding.contentMain.btnCambiarIdioma.setText("ES → EN");
+            sourceLang = TranslateLanguage.SPANISH; targetLang = TranslateLanguage.ENGLISH;
+            binding.contentMain.btnCambiarIdioma.setText("Español → Inglés");
         } else {
-            sourceLang = TranslateLanguage.ENGLISH;
-            targetLang = TranslateLanguage.SPANISH;
-            binding.contentMain.btnCambiarIdioma.setText("EN → ES");
+            sourceLang = TranslateLanguage.ENGLISH; targetLang = TranslateLanguage.SPANISH;
+            binding.contentMain.btnCambiarIdioma.setText("Inglés → Español");
         }
         crearTranslator();
         verificarYPrepararModelo();
-        reanudarLive(); // Reiniciar escaneo con el nuevo idioma
+        reanudarLive();
     }
 
     private void configurarBotones() {
         binding.contentMain.btnCapturar.setOnClickListener(v -> capturarFoto());
         binding.contentMain.btnReanudar.setOnClickListener(v -> reanudarLive());
         binding.contentMain.btnGaleria.setOnClickListener(v -> abrirGaleria());
-
         binding.contentMain.btnCambiarIdioma.setOnClickListener(v -> cambiarIdioma());
 
         binding.contentMain.btnTraducir.setOnClickListener(v -> {
             if (!lineasDetectadas.isEmpty() && modeloListo) {
-                // TRADUCCIÓN MANUAL
-                pausarAnalisis(); 
-                bloqueadoPorTraduccion = true; 
-                traducirLineas(); 
+                if (modoActual == Modo.LIVE) {
+                    Bitmap bmp = binding.contentMain.previewView.getBitmap();
+                    if (bmp != null) {
+                        binding.contentMain.imgCapturada.setImageBitmap(bmp);
+                        binding.contentMain.imgCapturada.setVisibility(View.VISIBLE);
+                        modoActual = Modo.CONGELADO;
+                        esCapturaManual = false;
+                    }
+                }
+                pausarAnalisis();
+                bloqueadoPorTraduccion = true;
+                traducirLineas();
                 actualizarUI();
             }
         });
@@ -198,92 +186,44 @@ public class MainActivity extends AppCompatActivity {
         });
 
         binding.fabCompartir.setOnClickListener(v -> compartirTexto());
-
         actualizarUI();
     }
 
     private void copiarAlPortapapeles(String texto) {
         if (texto.isEmpty()) return;
         ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-        ClipData clip = ClipData.newPlainText("Traducción", texto);
-        clipboard.setPrimaryClip(clip);
-        Toast.makeText(this, "Texto copiado al portapapeles", Toast.LENGTH_SHORT).show();
+        clipboard.setPrimaryClip(ClipData.newPlainText("Traducción", texto));
+        Toast.makeText(this, "Texto copiado", Toast.LENGTH_SHORT).show();
     }
 
     private void actualizarUI() {
         runOnUiThread(() -> {
-            boolean esLive      = modoActual == Modo.LIVE;
-            boolean esCongelado = modoActual == Modo.CONGELADO;
-            boolean esGaleria   = modoActual == Modo.GALERIA;
-
+            boolean esLive = modoActual == Modo.LIVE, esCongelado = modoActual == Modo.CONGELADO, esGaleria = modoActual == Modo.GALERIA;
             binding.contentMain.btnCapturar.setVisibility(esLive && !bloqueadoPorTraduccion ? View.VISIBLE : View.GONE);
             binding.contentMain.btnReanudar.setVisibility(esCongelado || esGaleria || bloqueadoPorTraduccion ? View.VISIBLE : View.GONE);
             binding.contentMain.btnGaleria.setVisibility((MODO_LIVE.equals(modoInicio) && esLive && !bloqueadoPorTraduccion) ? View.VISIBLE : View.GONE);
             
-            binding.contentMain.scannerFrame.setVisibility(View.VISIBLE);
-            binding.contentMain.scannerOverlay.setVisibility(esGaleria ? View.GONE : View.VISIBLE); // Ocultar overlay oscuro en galería
-
             if (!lineasDetectadas.isEmpty()) {
-                // En modo LIVE no mostramos el overlay automáticamente
-                binding.contentMain.overlayContainer.setVisibility(esLive ? View.GONE : View.VISIBLE);
-                if (ultimoTextoTraducido.isEmpty()) {
-                    binding.contentMain.btnTraducir.setVisibility(View.VISIBLE);
-                    binding.contentMain.btnVerOriginal.setVisibility(View.GONE);
-                } else {
-                    binding.contentMain.btnTraducir.setVisibility(View.GONE);
-                    binding.contentMain.btnVerOriginal.setVisibility(View.VISIBLE);
-                }
+                binding.contentMain.overlayContainer.setVisibility(View.VISIBLE);
+                binding.contentMain.btnTraducir.setVisibility(ultimoTextoTraducido.isEmpty() ? View.VISIBLE : View.GONE);
+                binding.contentMain.btnVerOriginal.setVisibility(ultimoTextoTraducido.isEmpty() ? View.GONE : View.VISIBLE);
             } else {
                 binding.contentMain.overlayContainer.setVisibility(View.GONE);
-                binding.contentMain.btnTraducir.setVisibility(View.GONE);
-                binding.contentMain.btnVerOriginal.setVisibility(View.GONE);
             }
 
-            binding.contentMain.badgeModo.setText(modoActual == Modo.LIVE ? "● EN VIVO" : "● ESTÁTICO");
-            binding.contentMain.badgeModo.setBackgroundResource(modoActual == Modo.LIVE ? R.drawable.badge_background : R.drawable.badge_background_frozen);
-
-            if (modoActual == Modo.GALERIA) {
-                binding.contentMain.previewView.setVisibility(View.GONE);
-                binding.contentMain.imgCapturada.setVisibility(View.VISIBLE);
-                binding.contentMain.imgCapturada.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER); // Mejor para galería
-            } else if (modoActual == Modo.CONGELADO) {
-                binding.contentMain.previewView.setVisibility(View.VISIBLE);
-                binding.contentMain.imgCapturada.setVisibility(View.VISIBLE);
-                binding.contentMain.imgCapturada.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
-            } else {
-                binding.contentMain.previewView.setVisibility(View.VISIBLE);
-                binding.contentMain.imgCapturada.setVisibility(View.GONE);
-            }
+            binding.contentMain.badgeModo.setText(esLive ? "● EN VIVO" : "● ESTÁTICO");
+            binding.contentMain.imgCapturada.setVisibility(esLive ? View.GONE : View.VISIBLE);
+            if (esGaleria) binding.contentMain.imgCapturada.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+            else if (esCongelado) binding.contentMain.imgCapturada.setScaleType(android.widget.ImageView.ScaleType.CENTER_CROP);
         });
     }
 
     private void solicitarPermisoYArrancar() {
-        if (tienePermisosCamara()) {
-            iniciarCamara();
-            if (MODO_GALERIA.equals(modoInicio)) abrirGaleria();
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            iniciarCamara(); if (MODO_GALERIA.equals(modoInicio)) abrirGaleria();
         } else {
-            List<String> permissions = new ArrayList<>();
-            permissions.add(Manifest.permission.CAMERA);
-            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
-                permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
-            }
-            ActivityCompat.requestPermissions(this, permissions.toArray(new String[0]), REQUEST_PERMISSIONS);
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, REQUEST_PERMISSIONS);
         }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
-        super.onRequestPermissionsResult(requestCode, permissions, results);
-        if (requestCode == REQUEST_PERMISSIONS && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
-            iniciarCamara();
-            if (MODO_GALERIA.equals(modoInicio)) abrirGaleria();
-        } else {
-            Toast.makeText(this, "Se necesita permiso de cámara.", Toast.LENGTH_LONG).show();
-        }
-    }
-
-    private boolean tienePermisosCamara() {
-        return ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED;
     }
 
     private void iniciarCamara() {
@@ -291,420 +231,217 @@ public class MainActivity extends AppCompatActivity {
         future.addListener(() -> {
             try {
                 cameraProvider = future.get();
-                bindCameraUseCases();
-            } catch (ExecutionException | InterruptedException e) {
-                Log.e("CAM", "Error iniciando cámara", e);
-            }
+                Preview preview = new Preview.Builder().build();
+                preview.setSurfaceProvider(binding.contentMain.previewView.getSurfaceProvider());
+                imageAnalysis = new ImageAnalysis.Builder().setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST).build();
+                imageAnalysis.setAnalyzer(cameraExecutor, this::procesarFrame);
+                imageCapture = new ImageCapture.Builder().setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY).build();
+                cameraProvider.unbindAll();
+                cameraProvider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, imageAnalysis, imageCapture);
+                actualizarUI();
+            } catch (Exception e) { Log.e("CAM", "Error", e); }
         }, ContextCompat.getMainExecutor(this));
     }
 
-    private void bindCameraUseCases() {
-        if (cameraProvider == null) return;
+    private void pausarAnalisis() { if (imageAnalysis != null) imageAnalysis.clearAnalyzer(); }
 
-        Preview preview = new Preview.Builder().build();
-        preview.setSurfaceProvider(binding.contentMain.previewView.getSurfaceProvider());
-
-        imageAnalysis = new ImageAnalysis.Builder()
-                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build();
-        imageAnalysis.setAnalyzer(cameraExecutor, this::procesarFrame);
-
-        imageCapture = new ImageCapture.Builder()
-                .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
-                .build();
-
-        cameraProvider.unbindAll();
-        cameraProvider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, preview, imageAnalysis, imageCapture);
-
-        modoActual = Modo.LIVE;
-        actualizarUI();
-    }
-
-    private void pausarAnalisis() {
-        if (imageAnalysis != null) imageAnalysis.clearAnalyzer();
-    }
-
-    @androidx.annotation.OptIn(markerClass = androidx.camera.core.ExperimentalGetImage.class)
     private void reanudarLive() {
-        bloqueadoPorTraduccion = false;
-        ultimoTextoTraducido = "";
-        binding.contentMain.imgCapturada.setVisibility(View.GONE);
-        binding.contentMain.previewView.setVisibility(View.VISIBLE);
-
-        if (imageAnalysis != null)
-            imageAnalysis.setAnalyzer(cameraExecutor, this::procesarFrame);
-
-        ultimoTextoDetectado = "";
-        lineasDetectadas.clear();
-        mostrandoOriginalEnOverlay = true;
-        binding.contentMain.txtOriginal.setText("Apunta la cámara al texto...");
+        bloqueadoPorTraduccion = false; ultimoTextoTraducido = ""; esCapturaManual = false;
+        if (imageAnalysis != null) imageAnalysis.setAnalyzer(cameraExecutor, this::procesarFrame);
+        lineasDetectadas.clear(); mostrandoOriginalEnOverlay = true;
+        binding.contentMain.txtOriginal.setText("Buscando texto...");
         binding.contentMain.txtTraducido.setText("");
-        binding.contentMain.overlayContainer.removeAllViews();
-        binding.contentMain.overlayContainer.setVisibility(View.GONE);
-        binding.contentMain.btnTraducir.setVisibility(View.GONE);
-        binding.contentMain.btnVerOriginal.setVisibility(View.GONE);
-
-        modoActual = Modo.LIVE;
-        actualizarUI();
+        modoActual = Modo.LIVE; actualizarUI();
     }
 
     private void capturarFoto() {
-        if (imageCapture == null) return;
-        pausarAnalisis();
-        modoActual = Modo.CONGELADO;
-        actualizarUI();
-
-        binding.contentMain.txtOriginal.setText("Procesando captura...");
-        binding.contentMain.txtTraducido.setText("");
-
+        if (imageCapture == null) return; pausarAnalisis(); modoActual = Modo.CONGELADO; actualizarUI();
         imageCapture.takePicture(cameraExecutor, new ImageCapture.OnImageCapturedCallback() {
-            @Override
-            @androidx.camera.core.ExperimentalGetImage
-            public void onCaptureSuccess(ImageProxy imageProxy) {
-                Bitmap bitmap = imageProxyToBitmap(imageProxy);
-                imageProxy.close();
-                if (bitmap != null) {
-                    runOnUiThread(() -> {
-                        binding.contentMain.imgCapturada.setImageBitmap(bitmap);
-                        binding.contentMain.imgCapturada.setVisibility(View.VISIBLE);
-                    });
-                    procesarOCRBitmap(bitmap);
-                }
+            @Override @OptIn(markerClass = ExperimentalGetImage.class)
+            public void onCaptureSuccess(ImageProxy ip) {
+                Bitmap b = imageProxyToBitmap(ip); ip.close();
+                if (b != null) runOnUiThread(() -> {
+                    esCapturaManual = true;
+                    binding.contentMain.imgCapturada.setImageBitmap(b);
+                    procesarOCRBitmap(b);
+                });
             }
-
-            @Override
-            @androidx.annotation.OptIn(markerClass = androidx.camera.core.ExperimentalGetImage.class)
-            public void onError(ImageCaptureException exception) {
-                runOnUiThread(() -> reanudarLive());
-            }
+            @Override public void onError(ImageCaptureException e) { runOnUiThread(() -> reanudarLive()); }
         });
     }
 
-    private Bitmap captureView(View view) {
-        Bitmap bitmap = Bitmap.createBitmap(view.getWidth(), view.getHeight(), Bitmap.Config.ARGB_8888);
-        android.graphics.Canvas canvas = new android.graphics.Canvas(bitmap);
-        view.draw(canvas);
-        return bitmap;
-    }
+    @OptIn(markerClass = ExperimentalGetImage.class)
+    private void procesarFrame(ImageProxy ip) {
+        if (bloqueadoPorTraduccion) { ip.close(); return; }
+        int rot = ip.getImageInfo().getRotationDegrees();
+        int w = (rot == 90 || rot == 270) ? ip.getHeight() : ip.getWidth();
+        int h = (rot == 90 || rot == 270) ? ip.getWidth() : ip.getHeight();
+        InputImage image = InputImage.fromMediaImage(ip.getImage(), rot);
 
-    private void saveBitmapToGallery(Bitmap bitmap) {
-        String filename = "OCR_" + System.currentTimeMillis() + ".jpg";
-        ContentValues values = new ContentValues();
-        values.put(MediaStore.Images.Media.DISPLAY_NAME, filename);
-        values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/OCR_App");
-            values.put(MediaStore.Images.Media.IS_PENDING, 1);
-        }
-
-        Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
-        if (uri != null) {
-            try (OutputStream out = getContentResolver().openOutputStream(uri)) {
-                if (out != null) {
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 100, out);
+        recognizer.process(image).addOnSuccessListener(vt -> {
+            if (bloqueadoPorTraduccion) return;
+            Rect rect = obtenerRectScanner(w, h);
+            ultimoScannerWidthPx = Math.max(1, rect.width());
+            ultimoScannerHeightPx = Math.max(1, rect.height());
+            List<DetectedLine> nuevas = new ArrayList<>();
+            for (Text.TextBlock b : vt.getTextBlocks()) {
+                for (Text.Line l : b.getLines()) {
+                    if (Rect.intersects(rect, l.getBoundingBox())) {
+                        Rect r = new Rect(l.getBoundingBox()); r.offset(-rect.left, -rect.top);
+                        nuevas.add(new DetectedLine(l.getText(), r, l.getBoundingBox().height()));
+                    }
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    values.clear();
-                    values.put(MediaStore.Images.Media.IS_PENDING, 0);
-                    getContentResolver().update(uri, values, null, null);
-                }
-                runOnUiThread(() -> Toast.makeText(this, "Imagen guardada en galería", Toast.LENGTH_SHORT).show());
-            } catch (IOException e) {
-                Log.e("SAVE_IMG", "Error al guardar imagen", e);
             }
-        }
-    }
-
-    @androidx.camera.core.ExperimentalGetImage
-    private Bitmap imageProxyToBitmap(ImageProxy imageProxy) {
-        try {
-            android.media.Image mediaImage = imageProxy.getImage();
-            if (mediaImage == null) return null;
-            InputImage inputImage = InputImage.fromMediaImage(mediaImage, imageProxy.getImageInfo().getRotationDegrees());
-            return inputImage.getBitmapInternal();
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    @androidx.annotation.OptIn(markerClass = androidx.camera.core.ExperimentalGetImage.class)
-    private void procesarFrame(ImageProxy imageProxy) {
-        if (bloqueadoPorTraduccion) {
-            imageProxy.close();
-            return;
-        }
-
-        android.media.Image mediaImage = imageProxy.getImage();
-        if (mediaImage == null) {
-            imageProxy.close();
-            return;
-        }
-
-        int rotation = imageProxy.getImageInfo().getRotationDegrees();
-        int frameWidth = imageProxy.getWidth();
-        int frameHeight = imageProxy.getHeight();
-        
-        int uprightWidth = (rotation == 90 || rotation == 270) ? frameHeight : frameWidth;
-        int uprightHeight = (rotation == 90 || rotation == 270) ? frameWidth : frameHeight;
-
-        InputImage image = InputImage.fromMediaImage(mediaImage, rotation);
-        
-        recognizer.process(image)
-                .addOnSuccessListener(visionText -> {
-                    Rect rectScanner = obtenerRectScanner(uprightWidth, uprightHeight);
-                    ultimoScannerWidthPx = rectScanner.width();
-                    ultimoScannerHeightPx = rectScanner.height();
-                    
-                    List<DetectedLine> nuevasLineas = new ArrayList<>();
-                    for (Text.TextBlock block : visionText.getTextBlocks()) {
-                        for (Text.Line line : block.getLines()) {
-                            if (Rect.intersects(rectScanner, line.getBoundingBox())) {
-                                Rect r = new Rect(line.getBoundingBox());
-                                r.offset(-rectScanner.left, -rectScanner.top);
-                                nuevasLineas.add(new DetectedLine(line.getText(), r, line.getBoundingBox().height()));
-                            }
-                        }
-                    }
-
-                    String formateado = TextFormatter.formatearLive(visionText, rectScanner);
-                    
-                    if (formateado.isEmpty()) {
-                        if (!ultimoTextoDetectado.isEmpty()) {
-                            ultimoTextoDetectado = "";
-                            lineasDetectadas.clear();
-                            ultimoTextoTraducido = ""; // Limpiar traduccion
-                            runOnUiThread(() -> {
-                                binding.contentMain.txtOriginal.setText("Buscando texto en el recuadro...");
-                                binding.contentMain.txtTraducido.setText("");
-                                binding.contentMain.overlayContainer.removeAllViews();
-                                binding.contentMain.overlayContainer.setVisibility(View.GONE);
-                                actualizarUI();
-                            });
-                        }
-                    } else if (!formateado.equals(ultimoTextoDetectado)) {
-                        ultimoTextoDetectado = formateado;
-                        lineasDetectadas = nuevasLineas;
-                        ultimoTextoTraducido = ""; // Limpiar traduccion al cambiar texto
-                        mostrandoOriginalEnOverlay = true; // Forzar original al detectar nuevo
-                        
-                        runOnUiThread(() -> {
-                            binding.contentMain.txtOriginal.setText(formateado);
-                            binding.contentMain.txtTraducido.setText("");
-                            dibujarOverlay();
-                            actualizarUI();
-                        });
-                    }
-                })
-                .addOnCompleteListener(task -> imageProxy.close());
+            lineasDetectadas = nuevas;
+            String txt = TextFormatter.formatearLive(vt, rect);
+            runOnUiThread(() -> {
+                if (!txt.equals(ultimoTextoDetectado)) {
+                    ultimoTextoDetectado = txt; binding.contentMain.txtOriginal.setText(txt.isEmpty() ? "Buscando texto..." : txt);
+                }
+                dibujarOverlay(); actualizarUI();
+            });
+        }).addOnCompleteListener(t -> ip.close());
     }
 
     private void dibujarOverlay() {
         binding.contentMain.overlayContainer.post(() -> {
             binding.contentMain.overlayContainer.removeAllViews();
             if (lineasDetectadas.isEmpty()) return;
-
-            float cvW = binding.contentMain.overlayContainer.getWidth();
-            float cvH = binding.contentMain.overlayContainer.getHeight();
-
-            // Usar dpToPx para valores de fallback correctos
-            if (cvW == 0) cvW = dpToPx(300);
-            if (cvH == 0) cvH = dpToPx(200);
-
-            float scaleX = cvW / ultimoScannerWidthPx;
-            float scaleY = cvH / ultimoScannerHeightPx;
+            float cvW = binding.contentMain.overlayContainer.getWidth(), cvH = binding.contentMain.overlayContainer.getHeight();
+            if (cvW == 0) cvW = dpToPx(300); if (cvH == 0) cvH = dpToPx(200);
+            float scaleX = cvW / (float) ultimoScannerWidthPx, scaleY = cvH / (float) ultimoScannerHeightPx;
 
             for (DetectedLine line : lineasDetectadas) {
-                TextView tv = new TextView(this);
-                
-                if (mostrandoOriginalEnOverlay) {
-                    // MODO ESCANEO (OCR ORIGINAL)
-                    tv.setText(line.originalText);
-                    tv.setTextColor(Color.WHITE);
-                    tv.setBackgroundColor(Color.parseColor("#99444444"));
-                    tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, line.rawHeight * scaleY * 0.50f);
-                    
-                    tv.setX(line.boundingBox.left * scaleX);
-                    tv.setY(line.boundingBox.top * scaleY);
+                if (mostrandoOriginalEnOverlay && modoActual == Modo.LIVE && !bloqueadoPorTraduccion) {
+                    View v = new View(this); v.setBackgroundColor(Color.parseColor("#4000B0FF"));
+                    v.setX(line.boundingBox.left * scaleX); v.setY(line.boundingBox.top * scaleY);
+                    binding.contentMain.overlayContainer.addView(v, new FrameLayout.LayoutParams((int)(line.boundingBox.width()*scaleX), (int)(line.boundingBox.height()*scaleY)));
                 } else {
-                    // MODO TRADUCCIÓN
-                    String texto = (line.translatedText != null ? line.translatedText : "...");
-                    tv.setText(texto);
-                    tv.setTextColor(Color.WHITE);
-                    tv.setBackgroundColor(Color.BLACK); 
-                    tv.setElevation(4f); 
-                    tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, line.rawHeight * scaleY * 0.45f);
-                    
-                    tv.setX(line.boundingBox.left * scaleX);
-                    tv.setY(line.boundingBox.top * scaleY);
+                    TextView tv = new TextView(this); tv.setTextColor(Color.WHITE); tv.setPadding(8, 2, 8, 2);
+                    tv.setText(mostrandoOriginalEnOverlay ? line.originalText : (line.translatedText != null ? line.translatedText : "..."));
+                    tv.setBackgroundColor(mostrandoOriginalEnOverlay ? Color.parseColor("#CC444444") : Color.BLACK);
+                    tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, line.rawHeight * scaleY * 0.8f);
+                    tv.setX(line.boundingBox.left * scaleX); tv.setY(line.boundingBox.top * scaleY);
+                    tv.setMaxWidth((int)(cvW - tv.getX()));
+                    binding.contentMain.overlayContainer.addView(tv, new FrameLayout.LayoutParams(-2, -2));
                 }
-
-                tv.setPadding(8, 2, 8, 2);
-
-                FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT,
-                        ViewGroup.LayoutParams.WRAP_CONTENT
-                );
-
-                tv.setMaxWidth((int) (cvW - tv.getX()));
-                binding.contentMain.overlayContainer.addView(tv, params);
             }
-            // Solo mostramos el overlay si NO estamos en modo LIVE
-            if (modoActual != Modo.LIVE) {
-                binding.contentMain.overlayContainer.setVisibility(View.VISIBLE);
-            } else {
-                binding.contentMain.overlayContainer.setVisibility(View.GONE);
-            }
+            binding.contentMain.overlayContainer.setVisibility(View.VISIBLE);
         });
-    }
-
-    private int dpToPx(int dp) {
-        return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, getResources().getDisplayMetrics());
     }
 
     private void traducirLineas() {
         if (lineasDetectadas.isEmpty()) return;
-        
         runOnUiThread(() -> binding.contentMain.txtTraducido.setText("Traduciendo..."));
         
-        StringBuilder fullText = new StringBuilder();
-        for (DetectedLine line : lineasDetectadas) {
-            fullText.append(line.originalText).append("\n");
-        }
+        StringBuilder sb = new StringBuilder();
+        for (DetectedLine l : lineasDetectadas) sb.append(l.originalText).append("\n");
         
-        translator.translate(fullText.toString().trim())
-                .addOnSuccessListener(traduccionCompleta -> {
-                    ultimoTextoTraducido = traduccionCompleta;
-                    String[] lineasTraducidas = traduccionCompleta.split("\n");
-                    
+        translator.translate(sb.toString().trim())
+                .addOnSuccessListener(t -> {
+                    String[] lines = t.split("\n");
                     for (int i = 0; i < lineasDetectadas.size(); i++) {
-                        if (i < lineasTraducidas.length) {
-                            lineasDetectadas.get(i).translatedText = lineasTraducidas[i];
-                        }
+                        lineasDetectadas.get(i).translatedText = (i < lines.length) ? lines[i] : "";
                     }
-                    
-                    runOnUiThread(() -> {
-                        binding.contentMain.txtTraducido.setText(traduccionCompleta);
-                        mostrandoOriginalEnOverlay = false;
-                        dibujarOverlay();
-                        actualizarUI();
-                        
-                        // GUARDAR EN GALERÍA EL RESULTADO FINAL
-                        if (modoActual == Modo.CONGELADO || modoActual == Modo.GALERIA) {
-                            binding.contentMain.cameraFrame.postDelayed(() -> {
-                                Bitmap capture = captureView(binding.contentMain.cameraFrame);
-                                saveBitmapToGallery(capture);
-                            }, 500);
-                        }
-                    });
+                    finalizeTraduccion();
                 })
                 .addOnFailureListener(e -> {
-                    runOnUiThread(() -> {
-                        Toast.makeText(this, "Error en la traducción", Toast.LENGTH_SHORT).show();
-                        bloqueadoPorTraduccion = false;
-                        actualizarUI();
-                    });
+                    for (DetectedLine l : lineasDetectadas) l.translatedText = l.originalText;
+                    finalizeTraduccion();
                 });
     }
 
-    private Rect obtenerRectScanner(int width, int height) {
-        int marginX = (int) (width * 0.2);
-        int marginY = (int) (height * 0.3);
-        return new Rect(marginX, marginY, width - marginX, height - marginY);
+    private void finalizeTraduccion() {
+        runOnUiThread(() -> {
+            StringBuilder sb = new StringBuilder();
+            for (DetectedLine l : lineasDetectadas) sb.append(l.translatedText).append("\n");
+            ultimoTextoTraducido = sb.toString().trim();
+            binding.contentMain.txtTraducido.setText(ultimoTextoTraducido);
+            mostrandoOriginalEnOverlay = false; dibujarOverlay(); actualizarUI();
+            if (esCapturaManual) {
+                binding.contentMain.cameraFrame.postDelayed(() -> {
+                    saveBitmapToGallery(captureView(binding.contentMain.cameraFrame));
+                    esCapturaManual = false;
+                }, 500);
+            }
+        });
     }
 
-    @androidx.annotation.OptIn(markerClass = androidx.camera.core.ExperimentalGetImage.class)
+    private Rect obtenerRectScanner(int imgW, int imgH) {
+        float viewW = binding.contentMain.cameraFrame.getWidth(), viewH = binding.contentMain.cameraFrame.getHeight();
+        if (viewW == 0 || viewH == 0) return new Rect((int)(imgW*0.2), (int)(imgH*0.3), (int)(imgW*0.8), (int)(imgH*0.7));
+        float boxW = binding.contentMain.scannerFrame.getWidth(), boxH = binding.contentMain.scannerFrame.getHeight();
+        float scale = (modoActual == Modo.GALERIA) ? Math.min(viewW/imgW, viewH/imgH) : Math.max(viewW/imgW, viewH/imgH);
+        float dImgW = imgW * scale, dImgH = imgH * scale;
+        float offX = (modoActual == Modo.GALERIA) ? (viewW - dImgW)/2f : (dImgW - viewW)/2f;
+        float offY = (modoActual == Modo.GALERIA) ? (viewH - dImgH)/2f : (dImgH - viewH)/2f;
+        
+        float bL = (viewW - boxW)/2f, bT = (viewH - boxH)/2f;
+        int iL = (int)((modoActual == Modo.GALERIA) ? (bL-offX)/scale : (bL+offX)/scale);
+        int iT = (int)((modoActual == Modo.GALERIA) ? (bT-offY)/scale : (bT+offY)/scale);
+        int iR = (int)((modoActual == Modo.GALERIA) ? (bL+boxW-offX)/scale : (bL+boxW+offX)/scale);
+        int iB = (int)((modoActual == Modo.GALERIA) ? (bT+boxH-offY)/scale : (bT+boxH+offY)/scale);
+        return new Rect(Math.max(0, iL), Math.max(0, iT), Math.min(imgW, iR), Math.min(imgH, iB));
+    }
+
     private void abrirGaleria() {
-        pausarAnalisis();
-        modoActual = Modo.GALERIA;
-        actualizarUI();
-        Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-        intent.setType("image/*");
+        pausarAnalisis(); modoActual = Modo.GALERIA; esCapturaManual = false; actualizarUI();
+        Intent intent = new Intent(Intent.ACTION_GET_CONTENT).setType("image/*");
         startActivityForResult(Intent.createChooser(intent, "Seleccionar imagen"), REQUEST_PICK_IMAGE);
     }
 
-    @Override
-    @androidx.annotation.OptIn(markerClass = androidx.camera.core.ExperimentalGetImage.class)
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode != RESULT_OK || requestCode != REQUEST_PICK_IMAGE || data == null || data.getData() == null) {
-            if (MODO_GALERIA.equals(modoInicio)) finish();
-            else reanudarLive();
-            return;
-        }
-        Uri imagenUri = data.getData();
-        try {
-            Bitmap bitmap = MediaStore.Images.Media.getBitmap(getContentResolver(), imagenUri);
-            if (cameraProvider != null) cameraProvider.unbindAll();
-            procesarOCRBitmap(bitmap);
-        } catch (IOException e) {
-            if (MODO_GALERIA.equals(modoInicio)) finish();
-            else reanudarLive();
-        }
+    @Override protected void onActivityResult(int rc, int res, @Nullable Intent d) {
+        super.onActivityResult(rc, res, d);
+        if (res == RESULT_OK && rc == REQUEST_PICK_IMAGE && d != null) {
+            try { Bitmap b = MediaStore.Images.Media.getBitmap(getContentResolver(), d.getData());
+                if (cameraProvider != null) cameraProvider.unbindAll(); procesarOCRBitmap(b);
+            } catch (Exception e) { reanudarLive(); }
+        } else if (MODO_GALERIA.equals(modoInicio)) finish(); else reanudarLive();
     }
 
-    private void procesarOCRBitmap(Bitmap bitmap) {
-        InputImage image = InputImage.fromBitmap(bitmap, 0);
-        recognizer.process(image)
-                .addOnSuccessListener(visionText -> {
-                    int w = bitmap.getWidth();
-                    int h = bitmap.getHeight();
-                    Rect rectScanner = obtenerRectScanner(w, h);
-                    ultimoScannerWidthPx = rectScanner.width();
-                    ultimoScannerHeightPx = rectScanner.height();
-                    
-                    List<DetectedLine> nuevasLineas = new ArrayList<>();
-                    for (Text.TextBlock block : visionText.getTextBlocks()) {
-                        for (Text.Line line : block.getLines()) {
-                            if (Rect.intersects(rectScanner, line.getBoundingBox())) {
-                                Rect r = new Rect(line.getBoundingBox());
-                                r.offset(-rectScanner.left, -rectScanner.top);
-                                nuevasLineas.add(new DetectedLine(line.getText(), r, line.getBoundingBox().height()));
-                            }
-                        }
+    private void procesarOCRBitmap(Bitmap b) {
+        recognizer.process(InputImage.fromBitmap(b, 0)).addOnSuccessListener(vt -> {
+            Rect rect = obtenerRectScanner(b.getWidth(), b.getHeight());
+            ultimoScannerWidthPx = Math.max(1, rect.width()); ultimoScannerHeightPx = Math.max(1, rect.height());
+            List<DetectedLine> nuevas = new ArrayList<>();
+            for (Text.TextBlock block : vt.getTextBlocks()) {
+                for (Text.Line l : block.getLines()) {
+                    if (Rect.intersects(rect, l.getBoundingBox())) {
+                        Rect r = new Rect(l.getBoundingBox()); r.offset(-rect.left, -rect.top);
+                        nuevas.add(new DetectedLine(l.getText(), r, l.getBoundingBox().height()));
                     }
-
-                    String textoFormateado = TextFormatter.formatearLive(visionText, rectScanner);
-                    ultimoTextoDetectado = textoFormateado;
-                    ultimoTextoTraducido = "";
-                    lineasDetectadas = nuevasLineas;
-                    mostrandoOriginalEnOverlay = true;
-
-                    runOnUiThread(() -> {
-                        binding.contentMain.imgCapturada.setImageBitmap(bitmap);
-                        binding.contentMain.imgCapturada.setVisibility(View.VISIBLE);
-                        binding.contentMain.txtOriginal.setText(textoFormateado.isEmpty() ? "No se detectó texto en el recuadro." : textoFormateado);
-                        actualizarUI();
-                        dibujarOverlay();
-                    });
-                });
+                }
+            }
+            lineasDetectadas = nuevas; ultimoTextoDetectado = TextFormatter.formatearLive(vt, rect);
+            runOnUiThread(() -> { binding.contentMain.imgCapturada.setImageBitmap(b); binding.contentMain.txtOriginal.setText(ultimoTextoDetectado);
+                mostrandoOriginalEnOverlay = true; dibujarOverlay(); actualizarUI();
+            });
+        });
     }
 
+    private void saveBitmapToGallery(Bitmap b) {
+        ContentValues v = new ContentValues(); v.put(MediaStore.Images.Media.DISPLAY_NAME, "OCR_" + System.currentTimeMillis() + ".jpg");
+        v.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) v.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/OCR_App");
+        Uri uri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v);
+        if (uri != null) { try (OutputStream o = getContentResolver().openOutputStream(uri)) { b.compress(Bitmap.CompressFormat.JPEG, 90, o);
+            runOnUiThread(() -> Toast.makeText(this, "Guardado en Galería", Toast.LENGTH_SHORT).show()); } catch (Exception e) {} }
+    }
+
+    private Bitmap captureView(View v) {
+        Bitmap b = Bitmap.createBitmap(v.getWidth(), v.getHeight(), Bitmap.Config.ARGB_8888);
+        v.draw(new android.graphics.Canvas(b)); return b;
+    }
+
+    private int dpToPx(int dp) { return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, getResources().getDisplayMetrics()); }
+    @OptIn(markerClass = ExperimentalGetImage.class)
+    private Bitmap imageProxyToBitmap(ImageProxy ip) { return InputImage.fromMediaImage(ip.getImage(), ip.getImageInfo().getRotationDegrees()).getBitmapInternal(); }
+    @Override public boolean onOptionsItemSelected(android.view.MenuItem item) { if (item.getItemId() == android.R.id.home) { finish(); return true; } return super.onOptionsItemSelected(item); }
+    @Override protected void onDestroy() { super.onDestroy(); if (recognizer != null) recognizer.close(); if (cameraExecutor != null) cameraExecutor.shutdown(); if (translator != null) translator.close(); }
     private void compartirTexto() {
-        String traducido = binding.contentMain.txtTraducido.getText().toString().trim();
-        String original  = binding.contentMain.txtOriginal.getText().toString().trim();
-        if (traducido.isEmpty() || traducido.equals("Traduciendo...")) return;
-
-        String textoCompartir = "Original: " + original + "\n\nTraducción: " + traducido;
-        Intent shareIntent = new Intent(Intent.ACTION_SEND);
-        shareIntent.setType("text/plain");
-        shareIntent.putExtra(Intent.EXTRA_TEXT, textoCompartir);
-        startActivity(Intent.createChooser(shareIntent, "Compartir traducción"));
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(android.view.MenuItem item) {
-        if (item.getItemId() == android.R.id.home) {
-            finish();
-            return true;
-        }
-        return super.onOptionsItemSelected(item);
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        if (recognizer != null) recognizer.close();
-        if (cameraExecutor != null) cameraExecutor.shutdown();
-        if (translator != null) translator.close();
+        if (ultimoTextoTraducido.isEmpty()) return;
+        Intent s = new Intent(Intent.ACTION_SEND).setType("text/plain");
+        s.putExtra(Intent.EXTRA_TEXT, "Original: " + ultimoTextoDetectado + "\n\nTraducción: " + ultimoTextoTraducido);
+        startActivity(Intent.createChooser(s, "Compartir traducción"));
     }
 }

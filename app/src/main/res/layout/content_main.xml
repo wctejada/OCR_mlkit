@@ -13,8 +13,7 @@
         android:orientation="horizontal"
         app:layout_constraintGuide_percent="0.58" />
 
-    <!-- Zona de cámara e imagen -->
-    <FrameLayout
+    <androidx.constraintlayout.widget.ConstraintLayout
         android:id="@+id/cameraFrame"
         android:layout_width="0dp"
         android:layout_height="0dp"
@@ -25,81 +24,90 @@
 
         <androidx.camera.view.PreviewView
             android:id="@+id/previewView"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
 
         <ImageView
             android:id="@+id/imgCapturada"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
+            android:layout_width="0dp"
+            android:layout_height="0dp"
             android:scaleType="centerCrop"
             android:contentDescription="Imagen capturada"
-            android:visibility="gone" />
+            android:visibility="gone"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
 
-        <!-- Overlay de Escaneo (Encuadre) -->
         <View
             android:id="@+id/scannerOverlay"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="#80000000" />
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:background="#80000000"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
 
         <View
             android:id="@+id/scannerFrame"
             android:layout_width="300dp"
             android:layout_height="200dp"
-            android:layout_gravity="center"
-            android:background="@drawable/scanner_frame_border" />
+            android:background="@drawable/scanner_frame_border"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
 
-        <!-- Contenedor para traducciones posicionadas (AR-like) -->
         <FrameLayout
             android:id="@+id/overlayContainer"
             android:layout_width="300dp"
             android:layout_height="200dp"
-            android:layout_gravity="center"
-            android:visibility="gone" />
+            android:visibility="gone"
+            app:layout_constraintTop_toTopOf="@id/scannerFrame"
+            app:layout_constraintBottom_toBottomOf="@id/scannerFrame"
+            app:layout_constraintStart_toStartOf="@id/scannerFrame"
+            app:layout_constraintEnd_toEndOf="@id/scannerFrame" />
 
-        <!-- Botones de control laterales (Badges e idioma) -->
+        <!-- Botón de idioma mejorado -->
         <LinearLayout
+            android:id="@+id/topOptions"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="top|end"
-            android:layout_margin="12dp"
-            android:orientation="vertical"
-            android:gravity="end">
-
-            <TextView
-                android:id="@+id/badgeModo"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:background="@drawable/badge_background"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
-                android:paddingTop="4dp"
-                android:paddingBottom="4dp"
-                android:text="● LIVE"
-                android:textColor="#FFFFFF"
-                android:textSize="12sp"
-                android:textStyle="bold" />
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:layout_marginBottom="16dp"
+            app:layout_constraintBottom_toTopOf="@id/scannerFrame"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnCambiarIdioma"
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:text="EN → ES"
+                android:text="Inglés → Español"
                 android:textColor="#FFFFFF"
-                android:backgroundTint="#80000000"
-                app:strokeColor="#FFFFFF"
-                android:textSize="10sp"
-                app:cornerRadius="4dp" />
+                android:backgroundTint="#B3000000"
+                app:strokeColor="#64B5F6"
+                app:strokeWidth="1dp"
+                android:textSize="11sp"
+                app:cornerRadius="20dp"
+                app:icon="@android:drawable/ic_menu_sort_alphabetically"
+                app:iconGravity="textStart"
+                app:iconSize="16dp"
+                app:iconTint="#64B5F6"
+                android:layout_marginEnd="8dp" />
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnVerOriginal"
                 style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
                 android:text="Ver Original"
                 android:textColor="#FFFFFF"
                 android:backgroundTint="#80000000"
@@ -108,14 +116,33 @@
                 app:cornerRadius="4dp" />
         </LinearLayout>
 
-        <!-- Botones inferiores (Cerca de la cámara) -->
+        <TextView
+            android:id="@+id/badgeModo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/badge_background"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="3dp"
+            android:paddingBottom="3dp"
+            android:text="● LIVE"
+            android:textColor="#FFFFFF"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_gravity="bottom|center_horizontal"
             android:orientation="horizontal"
             android:padding="16dp"
-            android:gravity="center">
+            android:gravity="center"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
 
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/btnCapturar"
@@ -129,7 +156,6 @@
                 app:backgroundTint="#CC1976D2"
                 app:fabSize="normal" />
 
-            <!-- BOTÓN TRADUCIR MOVIDO AQUÍ -->
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnTraducir"
                 style="@style/Widget.MaterialComponents.Button"
@@ -169,9 +195,8 @@
                 app:fabSize="normal" />
 
         </LinearLayout>
-    </FrameLayout>
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
-    <!-- Panel de resultados -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/controlsCard"
         android:layout_width="0dp"
