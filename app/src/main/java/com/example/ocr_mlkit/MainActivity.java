@@ -205,7 +205,7 @@ public class MainActivity extends AppCompatActivity {
         binding.contentMain.btnVerOriginal.setOnClickListener(v -> {
             mostrandoOriginalEnOverlay = !mostrandoOriginalEnOverlay;
             dibujarOverlay();
-            binding.contentMain.btnVerOriginal.setText(mostrandoOriginalEnOverlay ? "Ver Traducción" : "Ver Original");
+            actualizarUI(); // Refresca el texto del botón y el estado de la UI
         });
 
         binding.fabCompartir.setOnClickListener(v -> compartirTexto());
@@ -329,6 +329,9 @@ public class MainActivity extends AppCompatActivity {
                 binding.contentMain.overlayContainer.setVisibility(View.VISIBLE);
                 binding.contentMain.btnTraducir.setVisibility(ultimoTextoTraducido.isEmpty() ? View.VISIBLE : View.GONE);
                 binding.contentMain.btnVerOriginal.setVisibility(ultimoTextoTraducido.isEmpty() ? View.GONE : View.VISIBLE);
+                
+                // Actualiza el texto del botón según lo que se muestra actualmente en el overlay
+                binding.contentMain.btnVerOriginal.setText(mostrandoOriginalEnOverlay ? "Ver Traducción" : "Ver Original");
             } else {
                 binding.contentMain.overlayContainer.setVisibility(View.GONE);
             }
@@ -431,34 +434,36 @@ public class MainActivity extends AppCompatActivity {
         binding.contentMain.overlayContainer.post(() -> {
             binding.contentMain.overlayContainer.removeAllViews();
             if (lineasDetectadas.isEmpty()) return;
+            
+            // Si estamos en vivo y no estamos en proceso de traducción bloqueada, 
+            // no dibujamos nada para mantener la preview limpia.
+            if (modoActual == Modo.LIVE && !bloqueadoPorTraduccion) return;
+
             float cvW = binding.contentMain.overlayContainer.getWidth(), cvH = binding.contentMain.overlayContainer.getHeight();
             if (cvW == 0) cvW = dpToPx(300); if (cvH == 0) cvH = dpToPx(200);
             float scaleX = cvW / (float) ultimoScannerWidthPx, scaleY = cvH / (float) ultimoScannerHeightPx;
 
             for (DetectedLine line : lineasDetectadas) {
-                if (mostrandoOriginalEnOverlay && modoActual == Modo.LIVE && !bloqueadoPorTraduccion) {
-                    View v = new View(this); v.setBackgroundColor(Color.parseColor("#4000B0FF"));
-                    v.setX(line.boundingBox.left * scaleX); v.setY(line.boundingBox.top * scaleY);
-                    binding.contentMain.overlayContainer.addView(v, new FrameLayout.LayoutParams((int)(line.boundingBox.width()*scaleX), (int)(line.boundingBox.height()*scaleY)));
+                TextView tv = new TextView(this); tv.setTextColor(Color.WHITE); 
+                tv.setPadding(2, 1, 2, 1);
+                tv.setIncludeFontPadding(false);
+                float xPos = line.boundingBox.left * scaleX;
+                float yPos = line.boundingBox.top * scaleY;
+                
+                if (!mostrandoOriginalEnOverlay) {
+                    // Mostramos la traducción en el mismo lugar que el original
+                    tv.setText(line.translatedText != null ? line.translatedText : "...");
+                    tv.setBackgroundColor(Color.parseColor("#80000000")); // Fondo oscuro para legibilidad
                 } else {
-                    TextView tv = new TextView(this); tv.setTextColor(Color.WHITE); 
-                    tv.setPadding(1, 0, 1, 0);
-                    tv.setIncludeFontPadding(false);
-                    float xPos = line.boundingBox.left * scaleX;
-                    float yPos = line.boundingBox.top * scaleY;
-                    if (!mostrandoOriginalEnOverlay) {
-                        yPos += (line.boundingBox.height() * scaleY);
-                        tv.setText(line.translatedText != null ? line.translatedText : "...");
-                        tv.setBackgroundColor(Color.TRANSPARENT);
-                    } else {
-                        tv.setText(line.originalText);
-                        tv.setBackgroundColor(Color.parseColor("#0A444444"));
-                    }
-                    tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, line.rawHeight * scaleY * 0.22f);
-                    tv.setX(xPos); tv.setY(yPos);
-                    tv.setMaxWidth((int)(cvW - tv.getX()));
-                    binding.contentMain.overlayContainer.addView(tv, new FrameLayout.LayoutParams(-2, -2));
+                    // Mostramos texto original
+                    tv.setText(line.originalText);
+                    tv.setBackgroundColor(Color.parseColor("#40444444"));
                 }
+                
+                tv.setTextSize(TypedValue.COMPLEX_UNIT_PX, line.rawHeight * scaleY * 0.25f);
+                tv.setX(xPos); tv.setY(yPos);
+                tv.setMaxWidth((int)(cvW - tv.getX()));
+                binding.contentMain.overlayContainer.addView(tv, new FrameLayout.LayoutParams(-2, -2));
             }
             binding.contentMain.overlayContainer.setVisibility(View.VISIBLE);
         });
@@ -475,7 +480,9 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 ultimoTextoTraducido = t;
                 binding.contentMain.txtTraducido.setText(t);
-                mostrandoOriginalEnOverlay = false; dibujarOverlay(); actualizarUI();
+                mostrandoOriginalEnOverlay = false; // Al terminar de traducir, mostramos la traducción por defecto
+                dibujarOverlay(); 
+                actualizarUI();
                 if (esCapturaManual) binding.contentMain.cameraFrame.postDelayed(() -> saveBitmapToGallery(captureView(binding.contentMain.cameraFrame)), 500);
             });
         });
